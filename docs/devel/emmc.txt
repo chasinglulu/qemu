@@ -1,0 +1,16 @@
+====================
+eMMC block emulation
+====================
+
+Any eMMC devices has 3 kinds of partitions Boot, RPMB and User data. We
+are supporting Boot and User data partitions. Boot area partitions are
+expected to be 1MB size as hard coded in EXT_CSD register.
+
+Below is the example of combining two 1MB bootarea partition and
+user data partitions.
+
+      cat mmc-bootarea0.bin mmc-bootarea1.bin  image.wic > mmc.img
+      qemu-img resize mmc.img 4G
+
+Note: mmc-bootarea0/1 are just raw paritions. User data can have
+partition tables.
