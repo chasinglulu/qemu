@@ -29,6 +29,7 @@ Implemented devices:
 - 2 GEMs (Cadence MACB Ethernet MACs)
 - 8 ADMA (Xilinx zDMA) channels
 - 2 SD Controllers
+    * SDHCI0 can be configured as eMMC
 - OCM (256KB of On Chip Memory)
 - XRAM (4MB of on chip Accelerator RAM)
 - DDR memory
@@ -45,6 +46,21 @@ Other differences between the hardware and the QEMU model:
 
 - QEMU provides 8 virtio-mmio virtio transports; these start at
   address ``0xa0000000`` and have IRQs from 111 and upwards.
+
+Enabling eMMC
+"""""""""""""
+In order to enable eMMC pass the following machine property "emmc=on".
+ex:
+
+        "-M xlnx-versal-virt,emmc=on"
+
+Above switch would configure SDHCI0 to accept eMMC. More details on eMMC
+emulation can be found in docs/devel/emmc.txt.
+
+Below is the command to pass eMMC device.
+
+        "-drive file=emmc.img,if=none,id=emmc,format=raw
+        -device emmc,drive=emmc,id=emmc0,bus=/sdhci0/sd-bus"
 
 Running
 """""""
