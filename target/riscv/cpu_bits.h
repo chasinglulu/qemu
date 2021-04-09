@@ -650,6 +650,7 @@ typedef enum RISCVException {
     RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT = 0x17,
 } RISCVException;
 
+#define RISCV_EXCP_INT_CLIC                0x40000000
 #define RISCV_EXCP_INT_FLAG                0x80000000
 #define RISCV_EXCP_INT_MASK                0x7fffffff
 
