@@ -1945,6 +1945,18 @@ static RISCVException read_mintstatus(CPURISCVState *env, int csrno, target_ulon
     return RISCV_EXCP_NONE;
 }
 
+static RISCVException read_mintthresh(CPURISCVState *env, int csrno, target_ulong *val)
+{
+    *val = env->mintthresh;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException write_mintthresh(CPURISCVState *env, int csrno, target_ulong val)
+{
+    env->mintthresh = val;
+    return RISCV_EXCP_NONE;
+}
+
 /* Supervisor Trap Setup */
 static RISCVException read_sstatus_i128(CPURISCVState *env, int csrno,
                                         Int128 *val)
@@ -2316,6 +2328,18 @@ static RISCVException read_sintstatus(CPURISCVState *env, int csrno, target_ulon
 {
     target_ulong mask = SINTSTATUS_SIL | SINTSTATUS_UIL;
     *val = env->mintstatus & mask;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException read_sintthresh(CPURISCVState *env, int csrno, target_ulong *val)
+{
+    *val = env->sintthresh;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException write_sintthresh(CPURISCVState *env, int csrno, target_ulong val)
+{
+    env->sintthresh = val;
     return RISCV_EXCP_NONE;
 }
 
@@ -4282,9 +4306,13 @@ riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
 
     /* Machine Mode Core Level Interrupt Controller */
     [CSR_MINTSTATUS] = { "mintstatus", clic,  read_mintstatus },
+    [CSR_MINTTHRESH] = { "mintthresh", clic,  read_mintthresh,
+                         write_mintthresh },
 
     /* Supervisor Mode Core Level Interrupt Controller */
     [CSR_SINTSTATUS] = { "sintstatus", clic,  read_sintstatus },
+    [CSR_SINTTHRESH] = { "sintthresh", clic,  read_sintthresh,
+                         write_sintthresh },
 
 #endif /* !CONFIG_USER_ONLY */
 };
