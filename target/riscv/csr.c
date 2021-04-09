@@ -1662,9 +1662,18 @@ static RISCVException read_mtvec(CPURISCVState *env, int csrno,
 static RISCVException write_mtvec(CPURISCVState *env, int csrno,
                                   target_ulong val)
 {
-    /* bits [1:0] encode mode; 0 = direct, 1 = vectored, 2 >= reserved */
+    /*
+     * bits [1:0] encode mode; 0 = direct, 1 = vectored, 3 = CLIC,
+     * others reserved
+     */
     if ((val & 3) < 2) {
         env->mtvec = val;
+    } else if ((val & 1) && env->clic) {
+        /*
+         * If only CLIC mode is supported, writes to bit 1 are also ignored and
+         * it is always set to one. CLIC mode hardwires xtvec bits 2-5 to zero.
+         */
+        env->mtvec = ((val & ~0x3f) << 6) | (0b000011);
     } else {
         qemu_log_mask(LOG_UNIMP, "CSR_MTVEC: reserved mode not supported\n");
     }
@@ -2134,9 +2143,18 @@ static RISCVException read_stvec(CPURISCVState *env, int csrno,
 static RISCVException write_stvec(CPURISCVState *env, int csrno,
                                   target_ulong val)
 {
-    /* bits [1:0] encode mode; 0 = direct, 1 = vectored, 2 >= reserved */
+    /*
+     * bits [1:0] encode mode; 0 = direct, 1 = vectored, 3 = CLIC,
+     * others reserved
+     */
     if ((val & 3) < 2) {
         env->stvec = val;
+    } else if ((val & 1) && env->clic) {
+        /*
+         * If only CLIC mode is supported, writes to bit 1 are also ignored and
+         * it is always set to one. CLIC mode hardwires xtvec bits 2-5 to zero.
+         */
+        env->stvec = ((val & ~0x3f) << 6) | (0b000011);
     } else {
         qemu_log_mask(LOG_UNIMP, "CSR_STVEC: reserved mode not supported\n");
     }
