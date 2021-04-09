@@ -29,6 +29,10 @@
 #include "qemu/guest-random.h"
 #include "qapi/error.h"
 
+#if !defined(CONFIG_USER_ONLY)
+#include "hw/intc/riscv_clic.h"
+#endif
+
 /* CSR function table public API */
 void riscv_get_csr_ops(int csrno, riscv_csr_operations *ops)
 {
@@ -1360,10 +1364,14 @@ static RISCVException rmw_mie64(CPURISCVState *env, int csrno,
     uint64_t mask = wr_mask & all_ints;
 
     if (ret_val) {
-        *ret_val = env->mie;
+        /* The xie CSR appears hardwired to zero in CLIC mode, (Section 4.3) */
+        *ret_val = riscv_clic_is_clic_mode(env) ? 0 : env->mie;
     }
 
-    env->mie = (env->mie & ~mask) | (new_val & mask);
+    /* Writes to xie will be ignored and will not trap. (Section 4.3) */
+    if (!riscv_clic_is_clic_mode(env)) {
+        env->mie = (env->mie & ~mask) | (new_val & mask);
+    }
 
     if (!riscv_has_ext(env, RVH)) {
         env->mie &= ~((uint64_t)MIP_SGEIP);
