@@ -168,6 +168,7 @@
 #define CSR_MCAUSE          0x342
 #define CSR_MTVAL           0x343
 #define CSR_MIP             0x344
+#define CSR_MINTSTATUS      0x346 /* clic-spec-draft */
 
 /* Machine-Level Window to Indirectly Accessed Registers (AIA) */
 #define CSR_MISELECT        0x350
@@ -203,6 +204,7 @@
 #define CSR_SCAUSE          0x142
 #define CSR_STVAL           0x143
 #define CSR_SIP             0x144
+#define CSR_SINTSTATUS      0x146 /* clic-spec-draft */
 
 /* Sstc supervisor CSRs */
 #define CSR_STIMECMP        0x14D
@@ -684,6 +686,15 @@ typedef enum RISCVException {
 #define SIP_STIP                           MIP_STIP
 #define SIP_SEIP                           MIP_SEIP
 #define SIP_LCOFIP                         MIP_LCOFIP
+
+/* mintstatus */
+#define MINTSTATUS_MIL                     0xff000000 /* mil[7:0] */
+#define MINTSTATUS_SIL                     0x0000ff00 /* sil[7:0] */
+#define MINTSTATUS_UIL                     0x000000ff /* uil[7:0] */
+
+/* sintstatus */
+#define SINTSTATUS_SIL                     0x0000ff00 /* sil[7:0] */
+#define SINTSTATUS_UIL                     0x000000ff /* uil[7:0] */
 
 /* MIE masks */
 #define MIE_SEIE                           (1 << IRQ_S_EXT)
