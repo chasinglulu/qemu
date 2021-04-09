@@ -1720,6 +1720,18 @@ static RISCVException write_mcounteren(CPURISCVState *env, int csrno,
     return RISCV_EXCP_NONE;
 }
 
+static RISCVException read_mtvt(CPURISCVState *env, int csrno, target_ulong *val)
+{
+    *val = env->mtvt;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException write_mtvt(CPURISCVState *env, int csrno, target_ulong val)
+{
+    env->mtvt = val & ~((1ULL << 6) - 1);
+    return RISCV_EXCP_NONE;
+}
+
 /* Machine Trap Handling */
 static RISCVException read_mscratch_i128(CPURISCVState *env, int csrno,
                                          Int128 *val)
@@ -2172,6 +2184,18 @@ static RISCVException write_scounteren(CPURISCVState *env, int csrno,
                                        target_ulong val)
 {
     env->scounteren = val;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException read_stvt(CPURISCVState *env, int csrno, target_ulong *val)
+{
+    *val = env->stvt;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException write_stvt(CPURISCVState *env, int csrno, target_ulong val)
+{
+    env->stvt = val & ~((1ULL << 6) - 1);
     return RISCV_EXCP_NONE;
 }
 
@@ -4339,6 +4363,7 @@ riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
                              .min_priv_ver = PRIV_VERSION_1_12_0 },
 
     /* Machine Mode Core Level Interrupt Controller */
+    [CSR_MTVT] = { "mtvt", clic,  read_mtvt,  write_mtvt      },
     [CSR_MINTSTATUS] = { "mintstatus", clic,  read_mintstatus },
     [CSR_MINTTHRESH] = { "mintthresh", clic,  read_mintthresh,
                          write_mintthresh },
@@ -4347,6 +4372,9 @@ riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
     [CSR_SINTSTATUS] = { "sintstatus", clic,  read_sintstatus },
     [CSR_SINTTHRESH] = { "sintthresh", clic,  read_sintthresh,
                          write_sintthresh },
+
+    /* Supervisor Mode Core Level Interrupt Controller */
+    [CSR_STVT] = { "stvt", clic,  read_stvt, write_stvt       },
 
 #endif /* !CONFIG_USER_ONLY */
 };
