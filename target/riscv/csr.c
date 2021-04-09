@@ -1886,6 +1886,14 @@ static RISCVException rmw_mip64(CPURISCVState *env, int csrno,
     uint64_t old_mip, mask = wr_mask & delegable_ints;
     uint32_t gin;
 
+     /* The xip CSR appears hardwired to zero in CLIC mode. (Section 4.3) */
+    if (riscv_clic_is_clic_mode(env)) {
+        if (ret_val)
+            *ret_val = 0;
+
+        return RISCV_EXCP_NONE;
+    }
+
     if (mask & MIP_SEIP) {
         env->software_seip = new_val & MIP_SEIP;
         new_val |= env->external_seip * MIP_SEIP;
