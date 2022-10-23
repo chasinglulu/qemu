@@ -1522,6 +1522,23 @@ static bool pmsav7_use_background_region(ARMCPU *cpu, ARMMMUIdx mmu_idx,
     if (arm_feature(env, ARM_FEATURE_M)) {
         return env->v7m.mpu_ctrl[regime_is_secure(env, mmu_idx)]
             & R_V7M_MPU_CTRL_PRIVDEFENA_MASK;
+    } else if (arm_feature(env, ARM_FEATURE_PMSA)) {
+        if (regime_el(env, mmu_idx) == 2) {
+            if (mmu_idx != ARMMMUIdx_E2) {
+                return false;
+            } else if ((mmu_idx == ARMMMUIdx_E2)
+                       &&!(regime_sctlr(env, mmu_idx) & SCTLR_BR)) {
+                return false;
+            }
+        } else {
+            if (mmu_idx != ARMMMUIdx_Stage1_E1) {
+                return false;
+            } else if ((mmu_idx == ARMMMUIdx_Stage1_E1)
+                       &&!(regime_sctlr(env, mmu_idx) & SCTLR_BR)) {
+                return false;
+            }
+        }
+        return true;
     } else {
         return regime_sctlr(env, mmu_idx) & SCTLR_BR;
     }
@@ -1716,6 +1733,26 @@ static bool get_phys_addr_pmsav7(CPUARMState *env, uint32_t address,
     return !(*prot & (1 << access_type));
 }
 
+static uint32_t *regime_rbar(CPUARMState *env, ARMMMUIdx mmu_idx,
+                             uint32_t secure)
+{
+    if (regime_el(env, mmu_idx) == 2) {
+        return env->pmsav8.hprbar[secure];
+    } else {
+        return env->pmsav8.rbar[secure];
+    }
+}
+
+static uint32_t *regime_rlar(CPUARMState *env, ARMMMUIdx mmu_idx,
+                             uint32_t secure)
+{
+    if (regime_el(env, mmu_idx) == 2) {
+        return env->pmsav8.hprlar[secure];
+    } else {
+        return env->pmsav8.rlar[secure];
+    }
+}
+
 bool pmsav8_mpu_lookup(CPUARMState *env, uint32_t address,
                        MMUAccessType access_type, ARMMMUIdx mmu_idx,
                        hwaddr *phys_ptr, MemTxAttrs *txattrs,
@@ -1833,12 +1870,14 @@ bool pmsav8_mpu_lookup(CPUARMState *env, uint32_t address,
         /* hit using the background region */
         get_phys_addr_pmsav7_default(env, mmu_idx, address, prot);
     } else {
-        uint32_t ap = extract32(env->pmsav8.rbar[secure][matchregion], 1, 2);
-        uint32_t xn = extract32(env->pmsav8.rbar[secure][matchregion], 0, 1);
+        uint32_t matched_rbar = regime_rbar(env, mmu_idx, secure)[matchregion];
+        uint32_t matched_rlar = regime_rlar(env, mmu_idx, secure)[matchregion];
+        uint32_t ap = extract32(matched_rbar, 1, 2);
+        uint32_t xn = extract32(matched_rbar, 0, 1);
         bool pxn = false;
 
         if (arm_feature(env, ARM_FEATURE_V8_1M)) {
-            pxn = extract32(env->pmsav8.rlar[secure][matchregion], 4, 1);
+            pxn = extract32(matched_rlar, 4, 1);
         }
 
         if (m_is_system_region(env, address)) {
@@ -1846,14 +1885,43 @@ bool pmsav8_mpu_lookup(CPUARMState *env, uint32_t address,
             xn = 1;
         }
 
-        *prot = simple_ap_to_rw_prot(env, mmu_idx, ap);
+        if (arm_feature(env, ARM_FEATURE_M)) {
+            /*
+             * We don't need to look the attribute up in the MAIR0/MAIR1
+             * registers because that only tells us about cacheability.
+             */
+            *prot = simple_ap_to_rw_prot(env, mmu_idx, ap);
+        } else {
+            if (regime_el(env, mmu_idx) == 2) {
+                *prot = simple_ap_to_rw_prot_is_user(ap,
+                                                mmu_idx != ARMMMUIdx_E2);
+            } else {
+		*prot = simple_ap_to_rw_prot_is_user(ap,
+                                                mmu_idx != ARMMMUIdx_Stage1_E1);
+            }
+
+            if (regime_sctlr(env, mmu_idx) & SCTLR_WXN
+                && (*prot & PAGE_WRITE)) {
+                xn = 0x1;
+            }
+
+            if ((regime_el(env, mmu_idx) == 1) && regime_sctlr(env, mmu_idx)
+                 & SCTLR_UWXN && (ap == 0x1)) {
+                xn = 0x1;
+            }
+
+            /* uint8_t attrindx = extract32(matched_rlar, 1, 3); */
+            /* uint64_t mair = env->cp15.mair_el[regime_el(env, mmu_idx)]; */
+            /* uint8_t sh = extract32(matched_rlar, 3, 2); */
+            /* result->cacheattrs.is_s2_format = false; */
+            /* result->cacheattrs.attrs = extract64(mair, attrindx * 8, 8); */
+            /* result->cacheattrs.shareability = sh; */
+        }
+
         if (*prot && !xn && !(pxn && !is_user)) {
             *prot |= PAGE_EXEC;
         }
-        /*
-         * We don't need to look the attribute up in the MAIR0/MAIR1
-         * registers because that only tells us about cacheability.
-         */
+
         if (mregion) {
             *mregion = matchregion;
         }
