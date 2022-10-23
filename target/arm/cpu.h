@@ -307,6 +307,13 @@ typedef struct CPUArchState {
             };
             uint64_t sctlr_el[4];
         };
+        union { /* Virtualization System control register. */
+            struct {
+                uint32_t vsctlr_ns;
+                uint32_t vsctlr_s;
+            };
+            uint32_t vsctlr_el[2];
+        };
         uint64_t cpacr_el1; /* Architectural feature access control register */
         uint64_t cptr_el[4];  /* ARMv8 feature trap registers */
         uint32_t c1_xscaleauxcr; /* XScale auxiliary control register.  */
@@ -740,8 +747,11 @@ typedef struct CPUArchState {
          */
         uint32_t *rbar[M_REG_NUM_BANKS];
         uint32_t *rlar[M_REG_NUM_BANKS];
+        uint32_t *hprbar[M_REG_NUM_BANKS];
+        uint32_t *hprlar[M_REG_NUM_BANKS];
         uint32_t mair0[M_REG_NUM_BANKS];
         uint32_t mair1[M_REG_NUM_BANKS];
+        uint32_t hprselr[M_REG_NUM_BANKS];
     } pmsav8;
 
     /* v8M SAU */
@@ -901,6 +911,8 @@ struct ArchCPU {
     bool has_mpu;
     /* PMSAv7 MPU number of supported regions */
     uint32_t pmsav7_dregion;
+    /* PMSAv8 MPU number of supported hyp regions */
+    uint32_t pmsav8r_hdregion;
     /* v8M SAU number of supported regions */
     uint32_t sau_sregion;
 

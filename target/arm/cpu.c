@@ -451,6 +451,16 @@ static void arm_cpu_reset(DeviceState *dev)
                        sizeof(*env->pmsav7.dracr) * cpu->pmsav7_dregion);
             }
         }
+
+        if (cpu->pmsav8r_hdregion > 0) {
+            memset(env->pmsav8.hprbar[M_REG_NS], 0,
+                sizeof(*env->pmsav8.hprbar[M_REG_NS])
+                * cpu->pmsav8r_hdregion);
+            memset(env->pmsav8.hprlar[M_REG_NS], 0,
+                sizeof(*env->pmsav8.hprlar[M_REG_NS])
+                * cpu->pmsav8r_hdregion);
+        }
+
         env->pmsav7.rnr[M_REG_NS] = 0;
         env->pmsav7.rnr[M_REG_S] = 0;
         env->pmsav8.mair0[M_REG_NS] = 0;
@@ -1953,8 +1963,9 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
      */
     if (!cpu->has_mpu) {
         cpu->pmsav7_dregion = 0;
+        cpu->pmsav8r_hdregion = 0;
     }
-    if (cpu->pmsav7_dregion == 0) {
+    if ((cpu->pmsav7_dregion == 0) && (cpu->pmsav8r_hdregion == 0)) {
         cpu->has_mpu = false;
     }
 
@@ -1981,6 +1992,19 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
                 env->pmsav7.drsr = g_new0(uint32_t, nr);
                 env->pmsav7.dracr = g_new0(uint32_t, nr);
             }
+        }
+
+        if (cpu->pmsav8r_hdregion > 0xFF) {
+            error_setg(errp, "PMSAv8 MPU EL2 #regions invalid %" PRIu32,
+                              cpu->pmsav8r_hdregion);
+            return;
+        }
+
+        if (cpu->pmsav8r_hdregion) {
+            env->pmsav8.hprbar[M_REG_NS] = g_new0(uint32_t,
+                                            cpu->pmsav8r_hdregion);
+            env->pmsav8.hprlar[M_REG_NS] = g_new0(uint32_t,
+                                            cpu->pmsav8r_hdregion);
         }
     }
 

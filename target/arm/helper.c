@@ -3529,6 +3529,215 @@ static void pmsav7_rgnr_write(CPUARMState *env, const ARMCPRegInfo *ri,
     raw_write(env, ri, value);
 }
 
+static void prbar_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                          uint64_t value)
+{
+    ARMCPU *cpu = env_archcpu(env);
+
+    tlb_flush(CPU(cpu)); /* Mappings may have changed - purge! */
+    env->pmsav8.rbar[M_REG_NS][env->pmsav7.rnr[M_REG_NS]] = value;
+}
+
+static uint64_t prbar_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    return env->pmsav8.rbar[M_REG_NS][env->pmsav7.rnr[M_REG_NS]];
+}
+
+static void prlar_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                          uint64_t value)
+{
+    ARMCPU *cpu = env_archcpu(env);
+
+    tlb_flush(CPU(cpu)); /* Mappings may have changed - purge! */
+    env->pmsav8.rlar[M_REG_NS][env->pmsav7.rnr[M_REG_NS]] = value;
+}
+
+static uint64_t prlar_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    return env->pmsav8.rlar[M_REG_NS][env->pmsav7.rnr[M_REG_NS]];
+}
+
+static void prselr_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                           uint64_t value)
+{
+    ARMCPU *cpu = env_archcpu(env);
+
+    /* Ignore writes that would select not implemented region */
+    if (value >= cpu->pmsav7_dregion) {
+        return;
+    }
+
+    env->pmsav7.rnr[M_REG_NS] = value;
+}
+
+static void hprbar_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                          uint64_t value)
+{
+    ARMCPU *cpu = env_archcpu(env);
+
+    tlb_flush(CPU(cpu)); /* Mappings may have changed - purge! */
+    env->pmsav8.hprbar[M_REG_NS][env->pmsav8.hprselr[M_REG_NS]] = value;
+}
+
+static uint64_t hprbar_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    return env->pmsav8.hprbar[M_REG_NS][env->pmsav8.hprselr[M_REG_NS]];
+}
+
+static void hprlar_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                          uint64_t value)
+{
+    ARMCPU *cpu = env_archcpu(env);
+
+    tlb_flush(CPU(cpu)); /* Mappings may have changed - purge! */
+    env->pmsav8.hprlar[M_REG_NS][env->pmsav8.hprselr[M_REG_NS]] = value;
+}
+
+static uint64_t hprlar_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    return env->pmsav8.hprlar[M_REG_NS][env->pmsav8.hprselr[M_REG_NS]];
+}
+
+static void hprenr_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                          uint64_t value)
+{
+    uint32_t n;
+    uint32_t bit;
+    ARMCPU *cpu = env_archcpu(env);
+
+    /* Ignore writes to unimplemented regions */
+    value &= (1 << cpu->pmsav8r_hdregion) - 1;
+
+    tlb_flush(CPU(cpu)); /* Mappings may have changed - purge! */
+
+    /* Register alias is only valid for first 32 indexes */
+    for (n = 0; n < (cpu->pmsav8r_hdregion & 0x1F); ++n) {
+        bit = extract32(value, n, 1);
+        env->pmsav8.hprlar[M_REG_NS][n] = deposit32(
+                    env->pmsav8.hprlar[M_REG_NS][n], 0, 1, bit);
+    }
+}
+
+static uint64_t hprenr_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    uint32_t n;
+    uint32_t result = 0x0;
+    ARMCPU *cpu = env_archcpu(env);
+
+    /* Register alias is only valid for first 32 indexes */
+    for (n = 0; n < (cpu->pmsav8r_hdregion & 0x1F); ++n) {
+        if (env->pmsav8.hprlar[M_REG_NS][n] & 0x1) {
+            result |= (0x1 << n);
+        }
+    }
+    return result;
+}
+
+static void hprselr_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                           uint64_t value)
+{
+    ARMCPU *cpu = env_archcpu(env);
+
+    /* Ignore writes that would select not implemented region */
+    if (value >= cpu->pmsav8r_hdregion) {
+        return;
+    }
+
+    env->pmsav8.hprselr[M_REG_NS] = value;
+}
+
+static void pmsav8r_regn_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                          uint64_t value)
+{
+    ARMCPU *cpu = env_archcpu(env);
+    uint8_t index = (ri->crm & 0b111) << 1;
+    index |= (ri->opc2 & 1 << 2) >> 2;
+
+    tlb_flush(CPU(cpu)); /* Mappings may have changed - purge! */
+
+    if (ri->opc1 == 4) {
+        if (index >= cpu->pmsav8r_hdregion) {
+            return;
+        }
+        if (ri->opc2 & 0x1) {
+            env->pmsav8.hprlar[M_REG_NS][index] = value;
+        } else {
+            env->pmsav8.hprbar[M_REG_NS][index] = value;
+        }
+    } else {
+        if (index >= cpu->pmsav7_dregion) {
+            return;
+        }
+        if (ri->opc2 & 0x1) {
+            env->pmsav8.rlar[M_REG_NS][index] = value;
+        } else {
+            env->pmsav8.rbar[M_REG_NS][index] = value;
+        }
+    }
+}
+
+static uint64_t pmsav8r_regn_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    ARMCPU *cpu = env_archcpu(env);
+    uint8_t index = (ri->crm & 0b111) << 1;
+    index |= (ri->opc2 & 1 << 2) >> 2;
+
+    if (ri->opc1 == 4) {
+        if (index >= cpu->pmsav8r_hdregion) {
+            return 0x0;
+        }
+        if (ri->opc2 & 0x1) {
+            return env->pmsav8.hprlar[M_REG_NS][index];
+        } else {
+            return env->pmsav8.hprbar[M_REG_NS][index];
+        }
+    } else {
+        if (index >= cpu->pmsav7_dregion) {
+            return 0x0;
+        }
+        if (ri->opc2 & 0x1) {
+            return env->pmsav8.rlar[M_REG_NS][index];
+        } else {
+            return env->pmsav8.rbar[M_REG_NS][index];
+        }
+    }
+}
+
+static const ARMCPRegInfo pmsav8r_cp_reginfo[] = {
+    { .name = "PRBAR",
+        .cp = 15, .opc1 = 0, .crn = 6, .crm = 3, .opc2 = 0,
+        .access = PL1_RW, .type = ARM_CP_ALIAS,
+        .accessfn = access_tvm_trvm,
+        .readfn = prbar_read, .writefn = prbar_write},
+    { .name = "PRLAR",
+        .cp = 15, .opc1 = 0, .crn = 6, .crm = 3, .opc2 = 1,
+        .access = PL1_RW, .type = ARM_CP_ALIAS,
+        .accessfn = access_tvm_trvm,
+        .readfn = prlar_read, .writefn = prlar_write},
+    { .name = "PRSELR", .resetvalue = 0,
+        .cp = 15, .opc1 = 0, .crn = 6, .crm = 2, .opc2 = 1,
+        .access = PL1_RW, .accessfn = access_tvm_trvm,
+        .writefn = prselr_write,
+        .fieldoffset = offsetof(CPUARMState, pmsav7.rnr[M_REG_NS])},
+    { .name = "HPRBAR", .resetvalue = 0,
+        .cp = 15, .opc1 = 4, .crn = 6, .crm = 3, .opc2 = 0,
+        .access = PL2_RW, .type = ARM_CP_ALIAS,
+        .readfn = hprbar_read, .writefn = hprbar_write},
+    { .name = "HPRLAR",
+        .cp = 15, .opc1 = 4, .crn = 6, .crm = 3, .opc2 = 1,
+        .access = PL2_RW, .type = ARM_CP_ALIAS,
+        .readfn = hprlar_read, .writefn = hprlar_write},
+    { .name = "HPRSELR", .resetvalue = 0,
+        .cp = 15, .opc1 = 4, .crn = 6, .crm = 2, .opc2 = 1,
+        .access = PL2_RW,
+        .writefn = hprselr_write,
+        .fieldoffset = offsetof(CPUARMState, pmsav8.hprselr[M_REG_NS])},
+    { .name = "HPRENR",
+        .cp = 15, .opc1 = 4, .crn = 6, .crm = 1, .opc2 = 1,
+        .access = PL2_RW, .type = ARM_CP_ALIAS,
+        .readfn = hprenr_read, .writefn = hprenr_write},
+};
+
 static const ARMCPRegInfo pmsav7_cp_reginfo[] = {
     /* Reset for all these registers is handled in arm_cpu_reset(),
      * because the PMSAv7 is also used by M-profile CPUs, which do
@@ -7903,6 +8112,13 @@ void register_cp_regs_for_features(ARMCPU *cpu)
               .access = PL1_R, .type = ARM_CP_CONST,
               .resetvalue = cpu->pmsav7_dregion << 8
         };
+        /* HMPUIR is specific to PMSA V8 */
+        ARMCPRegInfo id_hmpuir_reginfo = {
+            .name = "HMPUIR",
+            .cp = 15, .crn = 0, .crm = 0, .opc1 = 4, .opc2 = 4,
+            .access = PL2_R, .type = ARM_CP_CONST,
+            .resetvalue = cpu->pmsav8r_hdregion
+        };
         static const ARMCPRegInfo crn0_wi_reginfo = {
             .name = "CRN0_WI", .cp = 15, .crn = 0, .crm = CP_ANY,
             .opc1 = CP_ANY, .opc2 = CP_ANY, .access = PL1_W,
@@ -7946,6 +8162,67 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         define_arm_cp_regs(cpu, id_cp_reginfo);
         if (!arm_feature(env, ARM_FEATURE_PMSA)) {
             define_one_arm_cp_reg(cpu, &id_tlbtr_reginfo);
+        } else if (arm_feature(env, ARM_FEATURE_PMSA)
+              && !arm_feature(env, ARM_FEATURE_M)
+               && arm_feature(env, ARM_FEATURE_V8)) {
+            uint32_t i = 0;
+            g_autofree char *tmp_string;
+
+            define_one_arm_cp_reg(cpu, &id_mpuir_reginfo);
+            define_one_arm_cp_reg(cpu, &id_hmpuir_reginfo);
+            define_arm_cp_regs(cpu, pmsav8r_cp_reginfo);
+
+            /* Register alias is only valid for first 32 indexes */
+            for (i = 0; i < (cpu->pmsav7_dregion & 0x1F); ++i) {
+                uint8_t crm = 0b1000 | ((i & 0b1110) >> 1);
+                uint8_t opc2 = (i & 0x1) << 2;
+
+                tmp_string = g_strdup_printf("PRBAR%u", i);
+                ARMCPRegInfo tmp_prbarn_reginfo = {
+                    .name = tmp_string, .type = ARM_CP_ALIAS,
+                    .cp = 15, .opc1 = 0, .crn = 6, .crm = crm, .opc2 = opc2,
+                    .access = PL1_RW, .resetvalue = 0,
+                    .accessfn = access_tvm_trvm,
+                    .writefn = pmsav8r_regn_write, .readfn = pmsav8r_regn_read
+                };
+                define_one_arm_cp_reg(cpu, &tmp_prbarn_reginfo);
+
+                opc2 = (i & 0x1) << 2 | 0x1;
+                tmp_string = g_strdup_printf("PRLAR%u", i);
+                ARMCPRegInfo tmp_prlarn_reginfo = {
+                    .name = tmp_string, .type = ARM_CP_ALIAS,
+                    .cp = 15, .opc1 = 0, .crn = 6, .crm = crm, .opc2 = opc2,
+                    .access = PL1_RW, .resetvalue = 0,
+                    .accessfn = access_tvm_trvm,
+                    .writefn = pmsav8r_regn_write, .readfn = pmsav8r_regn_read
+                };
+                define_one_arm_cp_reg(cpu, &tmp_prlarn_reginfo);
+            }
+
+            /* Register alias is only valid for first 32 indexes */
+            for (i = 0; i < (cpu->pmsav8r_hdregion & 0x1F); ++i) {
+                uint8_t crm = 0b1000 | ((i & 0b1110) >> 1);
+                uint8_t opc2 = (i & 0x1) << 2;
+
+                tmp_string = g_strdup_printf("HPRBAR%u", i);
+                ARMCPRegInfo tmp_hprbarn_reginfo = {
+                    .name = tmp_string, .type = ARM_CP_ALIAS,
+                    .cp = 15, .opc1 = 4, .crn = 6, .crm = crm, .opc2 = opc2,
+                    .access = PL2_RW, .resetvalue = 0,
+                    .writefn = pmsav8r_regn_write, .readfn = pmsav8r_regn_read
+                };
+                define_one_arm_cp_reg(cpu, &tmp_hprbarn_reginfo);
+
+                opc2 = (i & 0x1) << 2 | 0x1;
+                tmp_string = g_strdup_printf("HPRLAR%u", i);
+                ARMCPRegInfo tmp_hprlarn_reginfo = {
+                    .name = tmp_string, .type = ARM_CP_ALIAS,
+                    .cp = 15, .opc1 = 4, .crn = 6, .crm = crm, .opc2 = opc2,
+                    .access = PL2_RW, .resetvalue = 0,
+                    .writefn = pmsav8r_regn_write, .readfn = pmsav8r_regn_read
+                };
+                define_one_arm_cp_reg(cpu, &tmp_hprlarn_reginfo);
+            }
         } else if (arm_feature(env, ARM_FEATURE_V7)) {
             define_one_arm_cp_reg(cpu, &id_mpuir_reginfo);
         }
@@ -8067,6 +8344,19 @@ void register_cp_regs_for_features(ARMCPU *cpu)
             sctlr.type |= ARM_CP_SUPPRESS_TB_END;
         }
         define_one_arm_cp_reg(cpu, &sctlr);
+
+        if (arm_feature(env, ARM_FEATURE_PMSA)
+            && !arm_feature(env, ARM_FEATURE_M)
+            && arm_feature(env, ARM_FEATURE_V8)) {
+            ARMCPRegInfo vsctlr = {
+                .name = "VSCTLR", .state = ARM_CP_STATE_AA32,
+                .cp = 15, .opc1 = 4, .crn = 2, .crm = 0, .opc2 = 0,
+                .access = PL2_RW, .resetvalue = 0x0,
+                .bank_fieldoffsets = { offsetof(CPUARMState, cp15.vsctlr_s),
+                                    offsetof(CPUARMState, cp15.vsctlr_ns) },
+            };
+            define_one_arm_cp_reg(cpu, &vsctlr);
+        }
     }
 
     if (cpu_isar_feature(aa64_lor, cpu)) {
