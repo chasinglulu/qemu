@@ -8166,7 +8166,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
               && !arm_feature(env, ARM_FEATURE_M)
                && arm_feature(env, ARM_FEATURE_V8)) {
             uint32_t i = 0;
-            g_autofree char *tmp_string;
+            g_autofree char *tmp_string = NULL;
 
             define_one_arm_cp_reg(cpu, &id_mpuir_reginfo);
             define_one_arm_cp_reg(cpu, &id_hmpuir_reginfo);
