@@ -20,6 +20,7 @@
 #include "hw/arm/sigi-versal.h"
 #include "qom/object.h"
 #include "sysemu/sysemu.h"
+#include <stdbool.h>
 
 #define TYPE_HOBOT_VERSAL_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-versal-virt")
 OBJECT_DECLARE_SIMPLE_TYPE(HobotVersalVirt, HOBOT_VERSAL_VIRT_MACHINE)
@@ -336,6 +337,9 @@ static void versal_virt_init(MachineState *machine)
     if (!machine->kernel_filename) {
         object_property_set_bool(OBJECT(&s->soc), "secure", false, NULL);
         object_property_set_bool(OBJECT(&s->soc), "virtualization", false, NULL);
+    } else {
+        object_property_set_bool(OBJECT(&s->soc), "secure", true, NULL);
+        object_property_set_bool(OBJECT(&s->soc), "virtualization", true, NULL);
     }
     sysbus_realize(SYS_BUS_DEVICE(&s->soc), &error_fatal);
 
