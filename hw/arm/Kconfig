@@ -393,6 +393,12 @@ config XLNX_VERSAL
     select XLNX_BBRAM
     select XLNX_EFUSE_VERSAL
 
+config HOBOT_VERSAL
+    bool
+    select ARM_GIC
+    select SERIAL
+    select UNIMP
+
 config NPCM7XX
     bool
     select A9MPCORE

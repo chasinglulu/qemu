@@ -1,0 +1,379 @@
+/*
+ * Hobot Versal Virtual board.
+ *
+ * Copyright (c) 2022 Hobot Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 or
+ * (at your option) any later version.
+ */
+
+#include "qemu/osdep.h"
+#include "qemu/error-report.h"
+#include "qapi/error.h"
+#include "sysemu/device_tree.h"
+#include "hw/boards.h"
+#include "hw/sysbus.h"
+#include "hw/arm/fdt.h"
+#include "cpu.h"
+#include "hw/qdev-properties.h"
+#include "hw/arm/sigi-versal.h"
+#include "qom/object.h"
+
+#define TYPE_HOBOT_VERSAL_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-versal-virt")
+OBJECT_DECLARE_SIMPLE_TYPE(HobotVersalVirt, HOBOT_VERSAL_VIRT_MACHINE)
+
+struct HobotVersalVirt {
+    MachineState parent_obj;
+
+    SigiVersal soc;
+
+    void *fdt;
+    int fdt_size;
+    struct {
+        uint32_t gic;
+        uint32_t ethernet_phy[2];
+        uint32_t clk_125Mhz;
+        uint32_t clk_25Mhz;
+        uint32_t usb;
+        uint32_t dwc;
+    } phandle;
+    struct arm_boot_info binfo;
+
+    struct {
+        bool secure;
+    } cfg;
+};
+
+static void fdt_create(HobotVersalVirt *s)
+{
+    MachineClass *mc = MACHINE_GET_CLASS(s);
+    int i;
+
+    s->fdt = create_device_tree(&s->fdt_size);
+    if (!s->fdt) {
+        error_report("create_device_tree() failed");
+        exit(1);
+    }
+
+    /* Allocate all phandles.  */
+    s->phandle.gic = qemu_fdt_alloc_phandle(s->fdt);
+    for (i = 0; i < ARRAY_SIZE(s->phandle.ethernet_phy); i++) {
+        s->phandle.ethernet_phy[i] = qemu_fdt_alloc_phandle(s->fdt);
+    }
+    s->phandle.clk_25Mhz = qemu_fdt_alloc_phandle(s->fdt);
+    s->phandle.clk_125Mhz = qemu_fdt_alloc_phandle(s->fdt);
+
+    s->phandle.usb = qemu_fdt_alloc_phandle(s->fdt);
+    s->phandle.dwc = qemu_fdt_alloc_phandle(s->fdt);
+    /* Create /chosen node for load_dtb.  */
+    qemu_fdt_add_subnode(s->fdt, "/chosen");
+
+    /* Header */
+    qemu_fdt_setprop_cell(s->fdt, "/", "interrupt-parent", s->phandle.gic);
+    qemu_fdt_setprop_cell(s->fdt, "/", "#size-cells", 0x2);
+    qemu_fdt_setprop_cell(s->fdt, "/", "#address-cells", 0x2);
+    qemu_fdt_setprop_string(s->fdt, "/", "model", mc->desc);
+    qemu_fdt_setprop_string(s->fdt, "/", "compatible", "xlnx-versal-virt");
+}
+
+static void fdt_add_cpu_nodes(HobotVersalVirt *s, uint32_t psci_conduit)
+{
+    int i;
+
+    qemu_fdt_add_subnode(s->fdt, "/cpus");
+    qemu_fdt_setprop_cell(s->fdt, "/cpus", "#size-cells", 0x0);
+    qemu_fdt_setprop_cell(s->fdt, "/cpus", "#address-cells", 1);
+
+    for (i = SIGI_VERSAL_NR_ACPUS - 1; i >= 0; i--) {
+        char *name = g_strdup_printf("/cpus/cpu@%d", i);
+        ARMCPU *armcpu = ARM_CPU(qemu_get_cpu(i));
+
+        qemu_fdt_add_subnode(s->fdt, name);
+        qemu_fdt_setprop_cell(s->fdt, name, "reg", armcpu->mp_affinity);
+        if (psci_conduit != QEMU_PSCI_CONDUIT_DISABLED) {
+            qemu_fdt_setprop_string(s->fdt, name, "enable-method", "psci");
+        }
+        qemu_fdt_setprop_string(s->fdt, name, "device_type", "cpu");
+        qemu_fdt_setprop_string(s->fdt, name, "compatible",
+                                armcpu->dtb_compatible);
+        g_free(name);
+    }
+}
+
+static void fdt_add_gic_nodes(HobotVersalVirt *s)
+{
+    char *nodename;
+
+    nodename = g_strdup_printf("/gic@%x", MM_GIC_APU_DIST_MAIN);
+    qemu_fdt_add_subnode(s->fdt, nodename);
+    qemu_fdt_setprop_cell(s->fdt, nodename, "phandle", s->phandle.gic);
+    qemu_fdt_setprop_cells(s->fdt, nodename, "interrupts",
+                           GIC_FDT_IRQ_TYPE_PPI, VERSAL_GIC_MAINT_IRQ,
+                           GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+    qemu_fdt_setprop(s->fdt, nodename, "interrupt-controller", NULL, 0);
+    qemu_fdt_setprop_sized_cells(s->fdt, nodename, "reg",
+                                 2, MM_GIC_APU_DIST_MAIN,
+                                 2, MM_GIC_APU_DIST_MAIN_SIZE,
+                                 2, MM_GIC_APU_REDIST_0,
+                                 2, MM_GIC_APU_REDIST_0_SIZE);
+    qemu_fdt_setprop_cell(s->fdt, nodename, "#interrupt-cells", 3);
+    qemu_fdt_setprop_string(s->fdt, nodename, "compatible", "arm,gic-v3");
+    g_free(nodename);
+}
+
+static void fdt_add_timer_nodes(HobotVersalVirt *s)
+{
+    const char compat[] = "arm,armv8-timer";
+    uint32_t irqflags = GIC_FDT_IRQ_FLAGS_LEVEL_HI;
+
+    qemu_fdt_add_subnode(s->fdt, "/timer");
+    qemu_fdt_setprop_cells(s->fdt, "/timer", "interrupts",
+            GIC_FDT_IRQ_TYPE_PPI, VERSAL_TIMER_S_EL1_IRQ, irqflags,
+            GIC_FDT_IRQ_TYPE_PPI, VERSAL_TIMER_NS_EL1_IRQ, irqflags,
+            GIC_FDT_IRQ_TYPE_PPI, VERSAL_TIMER_VIRT_IRQ, irqflags,
+            GIC_FDT_IRQ_TYPE_PPI, VERSAL_TIMER_NS_EL2_IRQ, irqflags);
+    qemu_fdt_setprop(s->fdt, "/timer", "compatible",
+                     compat, sizeof(compat));
+}
+
+static void fdt_add_uart_nodes(HobotVersalVirt *s)
+{
+    uint64_t addrs[] = { MM_UART1, MM_UART0 };
+    uint64_t size[] = {MM_UART1_SIZE, MM_UART0_SIZE};
+    unsigned int irqs[] = { VERSAL_UART1_IRQ_0, VERSAL_UART0_IRQ_0 };
+    const char compat[] = "ns16550";
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(addrs); i++) {
+        char *name = g_strdup_printf("/uart@%" PRIx64, addrs[i]);
+        qemu_fdt_add_subnode(s->fdt, name);
+        qemu_fdt_setprop_cell(s->fdt, name, "current-speed", 115200);
+        qemu_fdt_setprop_cell(s->fdt, name, "clock-frequency", 192000000);
+        qemu_fdt_setprop_cell(s->fdt, name, "reg-io-width", 4);
+        qemu_fdt_setprop_cell(s->fdt, name, "reg-shift", 2);
+
+        qemu_fdt_setprop_cells(s->fdt, name, "interrupts",
+                               GIC_FDT_IRQ_TYPE_SPI, irqs[i],
+                               GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+        qemu_fdt_setprop_sized_cells(s->fdt, name, "reg",
+                                     2, addrs[i], 2, size[i]);
+        qemu_fdt_setprop(s->fdt, name, "compatible",
+                         compat, sizeof(compat));
+        qemu_fdt_setprop(s->fdt, name, "u-boot,dm-pre-reloc", NULL, 0);
+
+        if (addrs[i] == MM_UART1) {
+            /* Select UART0.  */
+            qemu_fdt_setprop_string(s->fdt, "/chosen", "stdout-path", name);
+        }
+        g_free(name);
+    }
+}
+
+static void fdt_nop_memory_nodes(void *fdt, Error **errp)
+{
+    Error *err = NULL;
+    char **node_path;
+    int n = 0;
+
+    node_path = qemu_fdt_node_unit_path(fdt, "memory", &err);
+    if (err) {
+        error_propagate(errp, err);
+        return;
+    }
+    while (node_path[n]) {
+        if (g_str_has_prefix(node_path[n], "/memory")) {
+            qemu_fdt_nop_node(fdt, node_path[n]);
+        }
+        n++;
+    }
+    g_strfreev(node_path);
+}
+
+static void fdt_add_memory_nodes(HobotVersalVirt *s, void *fdt, uint64_t ram_size)
+{
+    /* Describes the various split DDR access regions.  */
+    static const struct {
+        uint64_t base;
+        uint64_t size;
+    } addr_ranges[] = {
+        { MM_TOP_DDR, MM_TOP_DDR_SIZE },
+        { MM_TOP_DDR_2, MM_TOP_DDR_2_SIZE },
+        { MM_TOP_DDR_3, MM_TOP_DDR_3_SIZE },
+        { MM_TOP_DDR_4, MM_TOP_DDR_4_SIZE }
+    };
+    uint64_t mem_reg_prop[8] = {0};
+    uint64_t size = ram_size;
+    Error *err = NULL;
+    char *name;
+    int i;
+
+    fdt_nop_memory_nodes(fdt, &err);
+    if (err) {
+        error_report_err(err);
+        return;
+    }
+
+    name = g_strdup_printf("/memory@%x", MM_TOP_DDR);
+    for (i = 0; i < ARRAY_SIZE(addr_ranges) && size; i++) {
+        uint64_t mapsize;
+
+        mapsize = size < addr_ranges[i].size ? size : addr_ranges[i].size;
+
+        mem_reg_prop[i * 2] = addr_ranges[i].base;
+        mem_reg_prop[i * 2 + 1] = mapsize;
+        size -= mapsize;
+    }
+    qemu_fdt_add_subnode(fdt, name);
+    qemu_fdt_setprop_string(fdt, name, "device_type", "memory");
+
+    switch (i) {
+    case 1:
+        qemu_fdt_setprop_sized_cells(fdt, name, "reg",
+                                     2, mem_reg_prop[0],
+                                     2, mem_reg_prop[1]);
+        break;
+    case 2:
+        qemu_fdt_setprop_sized_cells(fdt, name, "reg",
+                                     2, mem_reg_prop[0],
+                                     2, mem_reg_prop[1],
+                                     2, mem_reg_prop[2],
+                                     2, mem_reg_prop[3]);
+        break;
+    case 3:
+        qemu_fdt_setprop_sized_cells(fdt, name, "reg",
+                                     2, mem_reg_prop[0],
+                                     2, mem_reg_prop[1],
+                                     2, mem_reg_prop[2],
+                                     2, mem_reg_prop[3],
+                                     2, mem_reg_prop[4],
+                                     2, mem_reg_prop[5]);
+        break;
+    case 4:
+        qemu_fdt_setprop_sized_cells(fdt, name, "reg",
+                                     2, mem_reg_prop[0],
+                                     2, mem_reg_prop[1],
+                                     2, mem_reg_prop[2],
+                                     2, mem_reg_prop[3],
+                                     2, mem_reg_prop[4],
+                                     2, mem_reg_prop[5],
+                                     2, mem_reg_prop[6],
+                                     2, mem_reg_prop[7]);
+        break;
+    default:
+        g_assert_not_reached();
+    }
+    g_free(name);
+}
+
+static void versal_virt_modify_dtb(const struct arm_boot_info *binfo,
+                                    void *fdt)
+{
+    HobotVersalVirt *s = container_of(binfo, HobotVersalVirt, binfo);
+
+    fdt_add_memory_nodes(s, fdt, binfo->ram_size);
+}
+
+static void *versal_virt_get_dtb(const struct arm_boot_info *binfo,
+                                  int *fdt_size)
+{
+    const HobotVersalVirt *board = container_of(binfo, HobotVersalVirt, binfo);
+
+    *fdt_size = board->fdt_size;
+    return board->fdt;
+}
+
+static void versal_virt_init(MachineState *machine)
+{
+    HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(machine);
+    int psci_conduit = QEMU_PSCI_CONDUIT_DISABLED;
+
+    /*
+     * If the user provides an Operating System to be loaded, we expect them
+     * to use the -kernel command line option.
+     *
+     * Users can load firmware or boot-loaders with the -device loader options.
+     *
+     * When loading an OS, we generate a dtb and let arm_load_kernel() select
+     * where it gets loaded. This dtb will be passed to the kernel in x0.
+     *
+     * If there's no -kernel option, we generate a DTB and place it at 0x1000
+     * for the bootloaders or firmware to pick up.
+     *
+     * If users want to provide their own DTB, they can use the -dtb option.
+     * These dtb's will have their memory nodes modified to match QEMU's
+     * selected ram_size option before they get passed to the kernel or fw.
+     *
+     * When loading an OS, we turn on QEMU's PSCI implementation with SMC
+     * as the PSCI conduit. When there's no -kernel, we assume the user
+     * provides EL3 firmware to handle PSCI.
+     *
+     * Even if the user provides a kernel filename, arm_load_kernel()
+     * may suppress PSCI if it's going to boot that guest code at EL3.
+     */
+    if (machine->kernel_filename) {
+        psci_conduit = QEMU_PSCI_CONDUIT_SMC;
+    }
+
+    object_initialize_child(OBJECT(machine), "sigi-versal", &s->soc,
+                            TYPE_SIGI_VERSAL);
+    object_property_set_link(OBJECT(&s->soc), "ddr", OBJECT(machine->ram),
+                             &error_abort);
+    sysbus_realize(SYS_BUS_DEVICE(&s->soc), &error_fatal);
+
+    fdt_create(s);
+    fdt_add_uart_nodes(s);
+    fdt_add_gic_nodes(s);
+    fdt_add_timer_nodes(s);
+    fdt_add_cpu_nodes(s, psci_conduit);
+
+    /* Make the APU cpu address space visible to virtio and other
+     * modules unaware of muliple address-spaces.  */
+    memory_region_add_subregion_overlap(get_system_memory(),
+                                        0, &s->soc.cpu_subsys.apu.mr, 0);
+
+    s->binfo.ram_size = machine->ram_size;
+    s->binfo.loader_start = 0x0;
+    s->binfo.get_dtb = versal_virt_get_dtb;
+    s->binfo.modify_dtb = versal_virt_modify_dtb;
+    s->binfo.psci_conduit = psci_conduit;
+    if (!machine->kernel_filename) {
+        /* Some boot-loaders (e.g u-boot) don't like blobs at address 0 (NULL).
+         * Offset things by 4K.  */
+        s->binfo.loader_start = 0x1000;
+        s->binfo.dtb_limit = 0x1000000;
+    }
+    arm_load_kernel(&s->soc.cpu_subsys.apu.cpu[0], machine, &s->binfo);
+}
+
+static void versal_virt_machine_instance_init(Object *obj)
+{
+}
+
+static void versal_virt_machine_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->desc = "Hobot Versal Virtual development board";
+    mc->init = versal_virt_init;
+    mc->min_cpus = SIGI_VERSAL_NR_ACPUS + SIGI_VERSAL_NR_RCPUS;
+    mc->max_cpus = SIGI_VERSAL_NR_ACPUS + SIGI_VERSAL_NR_RCPUS;
+    mc->default_cpus = SIGI_VERSAL_NR_ACPUS + SIGI_VERSAL_NR_RCPUS;
+    mc->no_cdrom = true;
+    mc->default_ram_id = "ddr";
+}
+
+static const TypeInfo versal_virt_machine_init_typeinfo = {
+    .name       = TYPE_HOBOT_VERSAL_VIRT_MACHINE,
+    .parent     = TYPE_MACHINE,
+    .class_init = versal_virt_machine_class_init,
+    .instance_init = versal_virt_machine_instance_init,
+    .instance_size = sizeof(HobotVersalVirt),
+};
+
+static void versal_virt_machine_init_register_types(void)
+{
+    type_register_static(&versal_virt_machine_init_typeinfo);
+}
+
+type_init(versal_virt_machine_init_register_types)
