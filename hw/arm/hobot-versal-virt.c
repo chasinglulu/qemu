@@ -198,9 +198,6 @@ static void fdt_add_memory_nodes(HobotVersalVirt *s, void *fdt, uint64_t ram_siz
         uint64_t size;
     } addr_ranges[] = {
         { MM_TOP_DDR, MM_TOP_DDR_SIZE },
-        { MM_TOP_DDR_2, MM_TOP_DDR_2_SIZE },
-        { MM_TOP_DDR_3, MM_TOP_DDR_3_SIZE },
-        { MM_TOP_DDR_4, MM_TOP_DDR_4_SIZE }
     };
     uint64_t mem_reg_prop[8] = {0};
     uint64_t size = ram_size;
@@ -333,7 +330,7 @@ static void versal_virt_init(MachineState *machine)
                                         0, &s->soc.cpu_subsys.apu.mr, 0);
 
     s->binfo.ram_size = machine->ram_size;
-    s->binfo.loader_start = 0x0;
+    s->binfo.loader_start = MM_TOP_DDR;
     s->binfo.get_dtb = versal_virt_get_dtb;
     s->binfo.modify_dtb = versal_virt_modify_dtb;
     s->binfo.psci_conduit = psci_conduit;

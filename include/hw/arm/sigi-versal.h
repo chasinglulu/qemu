@@ -61,7 +61,7 @@ struct SigiVersal {
 
     struct {
         /* 4 ranges to access DDR.  */
-        MemoryRegion mr_ddr_ranges[4];
+        MemoryRegion mr_ddr_ranges[1];
     } noc;
 
     struct {
@@ -103,13 +103,7 @@ struct SigiVersal {
 #define MM_UART1                    0x43b90000U
 #define MM_UART1_SIZE               0x10000
 
-#define MM_TOP_DDR                  0x0
-#define MM_TOP_DDR_SIZE             0x80000000U
-#define MM_TOP_DDR_2                0x800000000ULL
-#define MM_TOP_DDR_2_SIZE           0x800000000ULL
-#define MM_TOP_DDR_3                0xc000000000ULL
-#define MM_TOP_DDR_3_SIZE           0x4000000000ULL
-#define MM_TOP_DDR_4                0x10000000000ULL
-#define MM_TOP_DDR_4_SIZE           0xb780000000ULL
+#define MM_TOP_DDR                0x80000000U
+#define MM_TOP_DDR_SIZE           0x400000000ULL
 
 #endif
