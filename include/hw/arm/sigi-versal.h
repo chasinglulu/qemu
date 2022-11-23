@@ -44,6 +44,9 @@ struct SigiVersal {
     /*< private >*/
     SysBusDevice parent_obj;
 
+    bool secure;
+    bool virt;
+
     /*< public >*/
     struct {
         struct {

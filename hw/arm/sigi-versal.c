@@ -27,6 +27,34 @@
 #define SIGI_VERSAL_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a78ae")
 #define SIGI_VERSAL_RCPU_TYPE ARM_CPU_TYPE_NAME("cortex-r52")
 
+static bool virt_get_secure(Object *obj, Error **errp)
+{
+    SigiVersal *s = SIGI_VERSAL(obj);
+
+    return s->secure;
+}
+
+static void virt_set_secure(Object *obj, bool value, Error **errp)
+{
+    SigiVersal *s = SIGI_VERSAL(obj);
+
+    s->secure = value;
+}
+
+static bool virt_get_virt(Object *obj, Error **errp)
+{
+    SigiVersal *s = SIGI_VERSAL(obj);
+
+    return s->virt;
+}
+
+static void virt_set_virt(Object *obj, bool value, Error **errp)
+{
+    SigiVersal *s = SIGI_VERSAL(obj);
+
+    s->virt = value;
+}
+
 static void versal_create_apu_cpus(SigiVersal *s)
 {
     int i;
@@ -52,6 +80,12 @@ static void versal_create_apu_cpus(SigiVersal *s)
                                 &error_abort);
         object_property_set_link(obj, "memory", OBJECT(&s->cpu_subsys.apu.mr),
                                  &error_abort);
+        if (!s->secure)
+            object_property_set_bool(obj, "has_el3", false, NULL);
+
+        if (!s->virt)
+            object_property_set_bool(obj, "has_el2", false, NULL);
+
         qdev_realize(DEVICE(obj), NULL, &error_fatal);
     }
 
@@ -262,6 +296,18 @@ static void sigi_versal_class_init(ObjectClass *klass, void *data)
 
     dc->realize = sigi_versal_realize;
     device_class_set_props(dc, sigi_versal_properties);
+    object_class_property_add_bool(klass, "secure", virt_get_secure,
+                                   virt_set_secure);
+    object_class_property_set_description(klass, "secure",
+                                                "Set on/off to enable/disable the ARM "
+                                                "Security Extensions (TrustZone)");
+
+    object_class_property_add_bool(klass, "virtualization", virt_get_virt,
+                                   virt_set_virt);
+    object_class_property_set_description(klass, "virtualization",
+                                          "Set on/off to enable/disable emulating a "
+                                          "guest CPU which implements the ARM "
+                                          "Virtualization Extensions");
     /* No VMSD since we haven't got any top-level SoC state to save.  */
 }
 

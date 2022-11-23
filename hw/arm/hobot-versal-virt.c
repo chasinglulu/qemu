@@ -19,12 +19,14 @@
 #include "hw/qdev-properties.h"
 #include "hw/arm/sigi-versal.h"
 #include "qom/object.h"
+#include "sysemu/sysemu.h"
 
 #define TYPE_HOBOT_VERSAL_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-versal-virt")
 OBJECT_DECLARE_SIMPLE_TYPE(HobotVersalVirt, HOBOT_VERSAL_VIRT_MACHINE)
 
 struct HobotVersalVirt {
     MachineState parent_obj;
+    Notifier machine_done;
 
     SigiVersal soc;
 
@@ -280,6 +282,20 @@ static void *versal_virt_get_dtb(const struct arm_boot_info *binfo,
     return board->fdt;
 }
 
+static void versal_virt_machine_done(Notifier *notifier, void *data)
+{
+    HobotVersalVirt *s = container_of(notifier, HobotVersalVirt,
+                                    machine_done);
+    MachineState *ms = MACHINE(s);
+    ARMCPU *cpu = ARM_CPU(first_cpu);
+    struct arm_boot_info *info = &s->binfo;
+    AddressSpace *as = arm_boot_address_space(cpu, info);
+
+    if (arm_load_dtb(info->dtb_start, info, info->dtb_limit, as, ms) < 0) {
+        exit(1);
+    }
+}
+
 static void versal_virt_init(MachineState *machine)
 {
     HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(machine);
@@ -316,6 +332,11 @@ static void versal_virt_init(MachineState *machine)
                             TYPE_SIGI_VERSAL);
     object_property_set_link(OBJECT(&s->soc), "ddr", OBJECT(machine->ram),
                              &error_abort);
+
+    if (!machine->kernel_filename) {
+        object_property_set_bool(OBJECT(&s->soc), "secure", false, NULL);
+        object_property_set_bool(OBJECT(&s->soc), "virtualization", false, NULL);
+    }
     sysbus_realize(SYS_BUS_DEVICE(&s->soc), &error_fatal);
 
     fdt_create(s);
@@ -335,12 +356,16 @@ static void versal_virt_init(MachineState *machine)
     s->binfo.modify_dtb = versal_virt_modify_dtb;
     s->binfo.psci_conduit = psci_conduit;
     if (!machine->kernel_filename) {
-        /* Some boot-loaders (e.g u-boot) don't like blobs at address 0 (NULL).
-         * Offset things by 4K.  */
-        s->binfo.loader_start = 0x1000;
-        s->binfo.dtb_limit = 0x1000000;
+        s->binfo.psci_conduit = QEMU_PSCI_CONDUIT_SMC;
+        s->binfo.dtb_limit = 0x10000;
+        s->binfo.skip_dtb_autoload = true;
     }
     arm_load_kernel(&s->soc.cpu_subsys.apu.cpu[0], machine, &s->binfo);
+
+     if (!machine->kernel_filename) {
+        s->machine_done.notify = versal_virt_machine_done;
+        qemu_add_machine_init_done_notifier(&s->machine_done);
+     }
 }
 
 static void versal_virt_machine_instance_init(Object *obj)
