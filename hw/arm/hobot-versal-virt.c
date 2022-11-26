@@ -77,7 +77,7 @@ static void fdt_create(HobotVersalVirt *s)
     qemu_fdt_setprop_cell(s->fdt, "/", "#size-cells", 0x2);
     qemu_fdt_setprop_cell(s->fdt, "/", "#address-cells", 0x2);
     qemu_fdt_setprop_string(s->fdt, "/", "model", mc->desc);
-    qemu_fdt_setprop_string(s->fdt, "/", "compatible", "xlnx-versal-virt");
+    qemu_fdt_setprop_string(s->fdt, "/", "compatible", "hobot-versal-virt");
 }
 
 static void fdt_add_cpu_nodes(HobotVersalVirt *s, uint32_t psci_conduit)
@@ -89,8 +89,8 @@ static void fdt_add_cpu_nodes(HobotVersalVirt *s, uint32_t psci_conduit)
     qemu_fdt_setprop_cell(s->fdt, "/cpus", "#address-cells", 1);
 
     for (i = SIGI_VERSAL_NR_ACPUS - 1; i >= 0; i--) {
-        char *name = g_strdup_printf("/cpus/cpu@%d", i);
         ARMCPU *armcpu = ARM_CPU(qemu_get_cpu(i));
+        char *name = g_strdup_printf("/cpus/cpu@%lx", armcpu->mp_affinity);
 
         qemu_fdt_add_subnode(s->fdt, name);
         qemu_fdt_setprop_cell(s->fdt, name, "reg", armcpu->mp_affinity);
@@ -169,6 +169,27 @@ static void fdt_add_uart_nodes(HobotVersalVirt *s)
             /* Select UART0.  */
             qemu_fdt_setprop_string(s->fdt, "/chosen", "stdout-path", name);
         }
+        g_free(name);
+    }
+}
+
+static void fdt_add_sdhci_nodes(HobotVersalVirt *s)
+{
+    const char compat[] = "cdns,sd4hc";
+    int i;
+
+    for (i = ARRAY_SIZE(s->soc.cpu_subsys.peri.mmc) - 1; i >= 0; i--) {
+        uint64_t addr = MM_PERI_SDHCI0 + MM_PERI_SDHCI0_SIZE * i;
+        char *name = g_strdup_printf("/sdhci@%" PRIx64, addr);
+
+        qemu_fdt_add_subnode(s->fdt, name);
+
+        qemu_fdt_setprop_cells(s->fdt, name, "interrupts",
+                               GIC_FDT_IRQ_TYPE_SPI, VERSAL_SDHCI0_IRQ_0 + i * 2,
+                               GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+        qemu_fdt_setprop_sized_cells(s->fdt, name, "reg",
+                                     2, addr, 2, MM_PERI_SDHCI0_SIZE);
+        qemu_fdt_setprop(s->fdt, name, "compatible", compat, sizeof(compat));
         g_free(name);
     }
 }
@@ -345,6 +366,7 @@ static void versal_virt_init(MachineState *machine)
 
     fdt_create(s);
     fdt_add_uart_nodes(s);
+    fdt_add_sdhci_nodes(s);
     fdt_add_gic_nodes(s);
     fdt_add_timer_nodes(s);
     fdt_add_cpu_nodes(s, psci_conduit);
@@ -374,6 +396,7 @@ static void versal_virt_init(MachineState *machine)
 
 static void versal_virt_machine_instance_init(Object *obj)
 {
+    //object_property_set_str(obj, "dumpdtb", "dumpdtb.dtb", NULL);
 }
 
 static void versal_virt_machine_class_init(ObjectClass *oc, void *data)

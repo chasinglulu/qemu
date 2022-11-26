@@ -76,6 +76,7 @@ static void versal_create_apu_cpus(SigiVersal *s)
                                      &error_abort);
         }
 
+        s->cpu_subsys.apu.cpu[i].mp_affinity = i * 0x100;
         object_property_set_int(obj, "core-count", ARRAY_SIZE(s->cpu_subsys.apu.cpu),
                                 &error_abort);
         object_property_set_link(obj, "memory", OBJECT(&s->cpu_subsys.apu.mr),
@@ -218,6 +219,36 @@ static void versal_create_uarts(SigiVersal *s, qemu_irq *pic)
     }
 }
 
+#define SDHCI_CAPABILITIES 0x70146ec800
+static void versal_create_sdhci(SigiVersal *s, qemu_irq *pic)
+{
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(s->cpu_subsys.peri.mmc); i++) {
+        DeviceState *dev;
+        MemoryRegion *mr;
+
+        object_initialize_child(OBJECT(s), "sdhci[*]", &s->cpu_subsys.peri.mmc[i],
+                                TYPE_SYSBUS_SDHCI);
+        dev = DEVICE(&s->cpu_subsys.peri.mmc[i]);
+
+        object_property_set_uint(OBJECT(dev), "sd-spec-version", 3,
+                                 &error_fatal);
+        object_property_set_uint(OBJECT(dev), "capareg", SDHCI_CAPABILITIES,
+                                 &error_fatal);
+        object_property_set_uint(OBJECT(dev), "uhs", UHS_I, &error_fatal);
+
+        sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+        mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+        memory_region_add_subregion(&s->mr_ps,
+                                    MM_PERI_SDHCI0 + i * MM_PERI_SDHCI0_SIZE, mr);
+
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+                           pic[VERSAL_SDHCI0_IRQ_0 + i * 2]);
+    }
+}
+
 
 /* This takes the board allocated linear DDR memory and creates aliases
  * for each split DDR range/aperture on the Versal address map.
@@ -269,6 +300,7 @@ static void sigi_versal_realize(DeviceState *dev, Error **errp)
     versal_create_apu_gic(s, pic);
     versal_create_rpu_cpus(s);
     versal_create_uarts(s, pic);
+    versal_create_sdhci(s, pic);
     versal_map_ddr(s);
     versal_unimp(s);
 
