@@ -21,6 +21,7 @@
 #include "qom/object.h"
 #include "sysemu/sysemu.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 #define TYPE_HOBOT_VERSAL_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-versal-virt")
 OBJECT_DECLARE_SIMPLE_TYPE(HobotVersalVirt, HOBOT_VERSAL_VIRT_MACHINE)
@@ -38,6 +39,7 @@ struct HobotVersalVirt {
         uint32_t ethernet_phy[2];
         uint32_t clk_125Mhz;
         uint32_t clk_25Mhz;
+        uint32_t clk_200Mhz;
         uint32_t usb;
         uint32_t dwc;
     } phandle;
@@ -66,6 +68,7 @@ static void fdt_create(HobotVersalVirt *s)
     }
     s->phandle.clk_25Mhz = qemu_fdt_alloc_phandle(s->fdt);
     s->phandle.clk_125Mhz = qemu_fdt_alloc_phandle(s->fdt);
+    s->phandle.clk_200Mhz = qemu_fdt_alloc_phandle(s->fdt);
 
     s->phandle.usb = qemu_fdt_alloc_phandle(s->fdt);
     s->phandle.dwc = qemu_fdt_alloc_phandle(s->fdt);
@@ -78,6 +81,17 @@ static void fdt_create(HobotVersalVirt *s)
     qemu_fdt_setprop_cell(s->fdt, "/", "#address-cells", 0x2);
     qemu_fdt_setprop_string(s->fdt, "/", "model", mc->desc);
     qemu_fdt_setprop_string(s->fdt, "/", "compatible", "hobot-versal-virt");
+}
+
+static void fdt_add_clk_node(HobotVersalVirt *s, const char *name,
+                             unsigned int freq_hz, uint32_t phandle)
+{
+    qemu_fdt_add_subnode(s->fdt, name);
+    qemu_fdt_setprop_cell(s->fdt, name, "phandle", phandle);
+    qemu_fdt_setprop_cell(s->fdt, name, "clock-frequency", freq_hz);
+    qemu_fdt_setprop_cell(s->fdt, name, "#clock-cells", 0x0);
+    qemu_fdt_setprop_string(s->fdt, name, "compatible", "fixed-clock");
+    qemu_fdt_setprop(s->fdt, name, "u-boot,dm-pre-reloc", NULL, 0);
 }
 
 static void fdt_add_cpu_nodes(HobotVersalVirt *s, uint32_t psci_conduit)
@@ -184,9 +198,16 @@ static void fdt_add_sdhci_nodes(HobotVersalVirt *s)
 
         qemu_fdt_add_subnode(s->fdt, name);
 
+        qemu_fdt_setprop_cells(s->fdt, name, "sdhci-caps-mask",
+                                        0xffffffff, 0xffffffff);
+        qemu_fdt_setprop_cells(s->fdt, name, "sdhci-caps",
+                                        0x00002807, 0x37ec6481);
+        qemu_fdt_setprop_cell(s->fdt, name, "clocks",
+                               s->phandle.clk_200Mhz);
         qemu_fdt_setprop_cells(s->fdt, name, "interrupts",
                                GIC_FDT_IRQ_TYPE_SPI, VERSAL_SDHCI0_IRQ_0 + i * 2,
                                GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+
         qemu_fdt_setprop_sized_cells(s->fdt, name, "reg",
                                      2, addr, 2, MM_PERI_SDHCI0_SIZE);
         qemu_fdt_setprop(s->fdt, name, "compatible", compat, sizeof(compat));
@@ -382,6 +403,9 @@ static void versal_virt_init(MachineState *machine)
     fdt_add_gic_nodes(s);
     fdt_add_timer_nodes(s);
     fdt_add_cpu_nodes(s, psci_conduit);
+    fdt_add_clk_node(s, "/clk125", 125000000, s->phandle.clk_125Mhz);
+    fdt_add_clk_node(s, "/clk25", 25000000, s->phandle.clk_25Mhz);
+    fdt_add_clk_node(s, "/clk200", 200000000, s->phandle.clk_200Mhz);
 
     /* Make the APU cpu address space visible to virtio and other
      * modules unaware of muliple address-spaces.  */
