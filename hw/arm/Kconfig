@@ -398,7 +398,7 @@ config HOBOT_VERSAL
     select ARM_GIC
     select SERIAL
     select UNIMP
-    select SDHCI
+    select CADENCE_SDHCI
 
 config NPCM7XX
     bool

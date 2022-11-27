@@ -229,14 +229,8 @@ static void versal_create_sdhci(SigiVersal *s, qemu_irq *pic)
         MemoryRegion *mr;
 
         object_initialize_child(OBJECT(s), "sdhci[*]", &s->cpu_subsys.peri.mmc[i],
-                                TYPE_SYSBUS_SDHCI);
+                                TYPE_CADENCE_SDHCI);
         dev = DEVICE(&s->cpu_subsys.peri.mmc[i]);
-
-        object_property_set_uint(OBJECT(dev), "sd-spec-version", 3,
-                                 &error_fatal);
-        object_property_set_uint(OBJECT(dev), "capareg", SDHCI_CAPABILITIES,
-                                 &error_fatal);
-        object_property_set_uint(OBJECT(dev), "uhs", UHS_I, &error_fatal);
 
         sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 

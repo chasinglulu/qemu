@@ -318,10 +318,22 @@ static void versal_virt_machine_done(Notifier *notifier, void *data)
     }
 }
 
+static void sd_plugin_card(CadenceSDHCIState *cdns, DriveInfo *di)
+{
+    BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+    DeviceState *card;
+
+    card = qdev_new(TYPE_SD_CARD);
+    object_property_add_child(OBJECT(cdns), "card[*]", OBJECT(card));
+    qdev_prop_set_drive_err(card, "drive", blk, &error_fatal);
+    qdev_realize_and_unref(card, cdns->bus, &error_fatal);
+}
+
 static void versal_virt_init(MachineState *machine)
 {
     HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(machine);
     int psci_conduit = QEMU_PSCI_CONDUIT_DISABLED;
+    int i;
 
     /*
      * If the user provides an Operating System to be loaded, we expect them
@@ -375,6 +387,12 @@ static void versal_virt_init(MachineState *machine)
      * modules unaware of muliple address-spaces.  */
     memory_region_add_subregion_overlap(get_system_memory(),
                                         0, &s->soc.cpu_subsys.apu.mr, 0);
+
+    /* Plugin SD cards.  */
+    for (i = 0; i < ARRAY_SIZE(s->soc.cpu_subsys.peri.mmc); i++) {
+        sd_plugin_card(&s->soc.cpu_subsys.peri.mmc[i],
+                       drive_get(IF_SD, 0, i));
+    }
 
     s->binfo.ram_size = machine->ram_size;
     s->binfo.loader_start = MM_TOP_DDR;

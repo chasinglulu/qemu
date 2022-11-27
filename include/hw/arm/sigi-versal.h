@@ -17,7 +17,7 @@
 #include "hw/intc/arm_gicv3.h"
 #include "qom/object.h"
 #include "hw/char/serial.h"
-#include "hw/sd/sdhci.h"
+#include "hw/sd/cadence_sdhci.h"
 
 #define TYPE_SIGI_VERSAL "sigi-versal"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVersal, SIGI_VERSAL)
@@ -39,7 +39,7 @@ struct SigiVersal {
     struct {
         struct {
             SerialMM uarts[SIGI_VERSAL_NR_UARTS];
-            SDHCIState mmc[SIGI_VERSAL_NR_SDHCI];
+            CadenceSDHCIState mmc[SIGI_VERSAL_NR_SDHCI];
         } peri;
         struct {
             MemoryRegion mr;
@@ -99,7 +99,7 @@ struct SigiVersal {
 #define MM_PERI_SDHCI0              0x48030000U
 #define MM_PERI_SDHCI0_SIZE         0x10000
 
-#define MM_TOP_DDR                0x80000000U
-#define MM_TOP_DDR_SIZE           0x400000000ULL
+#define MM_TOP_DDR		0x80000000U
+#define MM_TOP_DDR_SIZE		0x400000000ULL
 
 #endif
