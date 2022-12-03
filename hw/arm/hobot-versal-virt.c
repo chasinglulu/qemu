@@ -409,8 +409,8 @@ static void versal_virt_init(MachineState *machine)
 
     /* Make the APU cpu address space visible to virtio and other
      * modules unaware of muliple address-spaces.  */
-    memory_region_add_subregion_overlap(get_system_memory(),
-                                        0, &s->soc.cpu_subsys.apu.mr, 0);
+    //memory_region_add_subregion_overlap(get_system_memory(),
+    //                                    0, &s->soc.cpu_subsys.apu.mr, 0);
 
     /* Plugin SD cards.  */
     for (i = 0; i < ARRAY_SIZE(s->soc.cpu_subsys.peri.mmc); i++) {

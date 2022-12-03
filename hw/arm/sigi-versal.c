@@ -15,6 +15,7 @@
 #include "qemu/module.h"
 #include "hw/sysbus.h"
 #include "net/net.h"
+#include "qom/object.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/kvm.h"
 #include "hw/arm/boot.h"
@@ -22,7 +23,9 @@
 #include "hw/misc/unimp.h"
 #include "hw/arm/sigi-versal.h"
 #include "qemu/log.h"
-#include "hw/sysbus.h"
+#include "hw/misc/unimp.h"
+#include "hw/nvme/nvme.h"
+
 
 #define SIGI_VERSAL_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a78ae")
 #define SIGI_VERSAL_RCPU_TYPE ARM_CPU_TYPE_NAME("cortex-r52")
@@ -79,7 +82,7 @@ static void versal_create_apu_cpus(SigiVersal *s)
         s->cpu_subsys.apu.cpu[i].mp_affinity = i * 0x100;
         object_property_set_int(obj, "core-count", ARRAY_SIZE(s->cpu_subsys.apu.cpu),
                                 &error_abort);
-        object_property_set_link(obj, "memory", OBJECT(&s->cpu_subsys.apu.mr),
+        object_property_set_link(obj, "memory", OBJECT(get_system_memory()),
                                  &error_abort);
         if (!s->secure)
             object_property_set_bool(obj, "has_el3", false, NULL);
@@ -91,6 +94,34 @@ static void versal_create_apu_cpus(SigiVersal *s)
     }
 
     qdev_realize(DEVICE(&s->cpu_subsys.apu.cluster), NULL, &error_fatal);
+}
+
+static void versal_create_its(SigiVersal *s)
+{
+    const char *itsclass = its_class_name();
+    DeviceState *dev;
+    MemoryRegion *mr;
+
+    printf("itsclass: %s\n", itsclass);
+
+    if (strcmp(itsclass, "arm-gicv3-its")) {
+            itsclass = NULL;
+    }
+
+    if (!itsclass) {
+        /* Do nothing if not supported */
+        return;
+    }
+
+    object_initialize_child(OBJECT(s), "apu-gic-its", &s->cpu_subsys.apu.its,
+                            itsclass);
+    dev = DEVICE(&s->cpu_subsys.apu.its);
+    //object_property_set_link(OBJECT(dev), "parent-gicv3", OBJECT(&s->cpu_subsys.apu.gic), &error_abort);
+    object_property_set_link(OBJECT(dev), "parent-gicv3", OBJECT(&s->cpu_subsys.apu.gic), &error_abort);
+    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->cpu_subsys.apu.its), 0);
+    memory_region_add_subregion(get_system_memory(), MM_GIC_ITS, mr);
 }
 
 static void versal_create_apu_gic(SigiVersal *s, qemu_irq *pic)
@@ -113,6 +144,8 @@ static void versal_create_apu_gic(SigiVersal *s, qemu_irq *pic)
     qdev_prop_set_uint32(gicdev, "num-irq", SIGI_VERSAL_NR_IRQS + 32);
     qdev_prop_set_uint32(gicdev, "len-redist-region-count", 1);
     qdev_prop_set_uint32(gicdev, "redist-region-count[0]", nr_apu_cpus);
+    object_property_set_link(OBJECT(gicdev), "sysmem", OBJECT(get_system_memory()), &error_fatal);
+    qdev_prop_set_bit(gicdev, "has-lpi", true);
     qdev_prop_set_bit(gicdev, "has-security-extensions", true);
 
     sysbus_realize(SYS_BUS_DEVICE(&s->cpu_subsys.apu.gic), &error_fatal);
@@ -121,7 +154,7 @@ static void versal_create_apu_gic(SigiVersal *s, qemu_irq *pic)
         MemoryRegion *mr;
 
         mr = sysbus_mmio_get_region(gicbusdev, i);
-        memory_region_add_subregion(&s->cpu_subsys.apu.mr, addrs[i], mr);
+        memory_region_add_subregion(get_system_memory(), addrs[i], mr);
     }
 
     for (i = 0; i < nr_apu_cpus; i++) {
@@ -160,6 +193,7 @@ static void versal_create_apu_gic(SigiVersal *s, qemu_irq *pic)
     for (i = 0; i < SIGI_VERSAL_NR_IRQS; i++) {
         pic[i] = qdev_get_gpio_in(gicdev, i);
     }
+    versal_create_its(s);
 }
 
 static void versal_create_rpu_cpus(SigiVersal *s)
@@ -183,7 +217,7 @@ static void versal_create_rpu_cpus(SigiVersal *s)
         object_property_set_int(obj, "mp-affinity", 0x100 | i, &error_abort);
         object_property_set_int(obj, "core-count", ARRAY_SIZE(s->mcu_subsys.rpu.cpu),
                                 &error_abort);
-        object_property_set_link(obj, "memory", OBJECT(&s->mcu_subsys.rpu.mr),
+        object_property_set_link(obj, "memory", OBJECT(get_system_memory()),
                                  &error_abort);
         qdev_realize(DEVICE(obj), NULL, &error_fatal);
     }
@@ -212,10 +246,97 @@ static void versal_create_uarts(SigiVersal *s, qemu_irq *pic)
         sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
         mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
-        memory_region_add_subregion(&s->mr_ps, addrs[i], mr);
+        memory_region_add_subregion(get_system_memory(), addrs[i], mr);
 
         sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, pic[irqs[i]]);
         g_free(name);
+    }
+}
+
+/*
+static void versal_create_dw_pcie(SigiVersal *s, qemu_irq *pic)
+{
+
+    static const int irqs[] = { VERSAL_PCIE_IRQ_A, VERSAL_PCIE_IRQ_B,
+                                VERSAL_PCIE_IRQ_C, VERSAL_PCIE_IRQ_D};
+    DeviceState *dev;
+    MemoryRegion *mr;
+    int i;
+
+    object_initialize_child(OBJECT(s), "dw_pcie", &s->cpu_subsys.peri.dw_pcie,
+                                TYPE_DESIGNWARE_PCIE_HOST);
+    dev = DEVICE(&s->cpu_subsys.peri.dw_pcie);
+    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+    memory_region_add_subregion(&s->mr_ps, MM_PERI_DW_PCIE, mr);
+
+    for (i = 0; i < ARRAY_SIZE(irqs); i++) {
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), i, pic[irqs[i]]);
+    }
+}
+*/
+
+static void versal_create_pcie(SigiVersal *s, qemu_irq *pic)
+{
+
+    static const int irqs[] = { VERSAL_PCIE_IRQ_A, VERSAL_PCIE_IRQ_B,
+                                VERSAL_PCIE_IRQ_C, VERSAL_PCIE_IRQ_D};
+    DeviceState *dev;
+    MemoryRegion *mmio_alias;
+    MemoryRegion *mmio_reg;
+    MemoryRegion *ecam_alias;
+    MemoryRegion *ecam_reg;
+    int i;
+
+    //dev = qdev_new(TYPE_GPEX_HOST);
+    //sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+    object_initialize_child(OBJECT(s), "pcie", &s->cpu_subsys.peri.pcie,
+                                TYPE_GPEX_HOST);
+    dev = DEVICE(&s->cpu_subsys.peri.pcie);
+    //object_property_set_bool(OBJECT(dev), "allow-unmapped-accesses", false, NULL);
+    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+    /* Map only the first size_ecam bytes of ECAM space */
+    ecam_alias = g_new0(MemoryRegion, 1);
+    ecam_reg = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+    memory_region_init_alias(ecam_alias, OBJECT(dev), "pcie-ecam",
+                             ecam_reg, 0, MM_PERI_PCIE_CFG_SIZE);
+    memory_region_add_subregion(get_system_memory(),
+                                MM_PERI_PCIE_CFG, ecam_alias);
+
+    /* Map the MMIO window into system address space so as to expose
+     * the section of PCI MMIO space which starts at the same base address
+     * (ie 1:1 mapping for that part of PCI MMIO space visible through
+     * the window).
+     */
+    mmio_alias = g_new0(MemoryRegion, 1);
+    mmio_reg = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 1);
+    memory_region_init_alias(mmio_alias, OBJECT(dev), "pcie-mmio",
+                             mmio_reg, MM_PERI_PCIE_MMIO, MM_PERI_PCIE_MMIO_SIZE);
+    memory_region_add_subregion(get_system_memory(), MM_PERI_PCIE_MMIO, mmio_alias);
+
+    /* Map high MMIO space */
+    MemoryRegion *high_mmio_alias = g_new0(MemoryRegion, 1);
+    memory_region_init_alias(high_mmio_alias, OBJECT(dev), "pcie-mmio-high",
+                             mmio_reg, MM_PERI_PCIE_MMIO_HIGH, MM_PERI_PCIE_MMIO_HIGH_SIZE);
+    memory_region_add_subregion(get_system_memory(), MM_PERI_PCIE_MMIO_HIGH,
+                                high_mmio_alias);
+
+#if 0
+    pci_dev = pci_new(-1, TYPE_NVME);
+    qdev_prop_set_string(&pci_dev->qdev, "serial", "deadbeef");
+    pci_realize_and_unref(pci_dev, PCI_HOST_BRIDGE(dev)->bus, &error_fatal);
+    //mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+    //memory_region_add_subregion(get_system_memory(), MM_PERI_PCIE_MMIO, mr);
+
+    //pci_create_simple(PCI_HOST_BRIDGE(dev)->bus, -1, TYPE_NVME);
+    //sysbus_mmio_map(SYS_BUS_DEVICE(dev), 2, 0x60ff0000);
+#endif
+
+    for (i = 0; i < ARRAY_SIZE(irqs); i++) {
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), i, pic[irqs[i]]);
+        gpex_set_irq_num(GPEX_HOST(dev), i, irqs[i]);
     }
 }
 
@@ -235,7 +356,7 @@ static void versal_create_sdhci(SigiVersal *s, qemu_irq *pic)
         sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
         mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
-        memory_region_add_subregion(&s->mr_ps,
+        memory_region_add_subregion(get_system_memory(),
                                     MM_PERI_SDHCI0 + i * MM_PERI_SDHCI0_SIZE, mr);
 
         sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
@@ -273,7 +394,7 @@ static void versal_map_ddr(SigiVersal *s)
                                  offset, mapsize);
 
         /* Map it onto the NoC MR.  */
-        memory_region_add_subregion(&s->mr_ps, addr_ranges[i].base,
+        memory_region_add_subregion(get_system_memory(), addr_ranges[i].base,
                                     &s->noc.mr_ddr_ranges[i]);
         offset += mapsize;
         size -= mapsize;
@@ -283,6 +404,7 @@ static void versal_map_ddr(SigiVersal *s)
 
 static void versal_unimp(SigiVersal *s)
 {
+    //create_unimplemented_device("pcie-phy", MM_PERI_PCIE_PHY, MM_PERI_PCIE_PHY_SIZE);
 }
 
 static void sigi_versal_realize(DeviceState *dev, Error **errp)
@@ -295,19 +417,21 @@ static void sigi_versal_realize(DeviceState *dev, Error **errp)
     versal_create_rpu_cpus(s);
     versal_create_uarts(s, pic);
     versal_create_sdhci(s, pic);
+    //versal_create_dw_pcie(s, pic);
+    versal_create_pcie(s, pic);
     versal_map_ddr(s);
     versal_unimp(s);
 
-    memory_region_add_subregion_overlap(&s->cpu_subsys.apu.mr, 0, &s->mr_ps, 0);
+    //memory_region_add_subregion_overlap(&s->cpu_subsys.apu.mr, 0, &s->mr_ps, 0);
 }
 
 static void sigi_versal_init(Object *obj)
 {
-    SigiVersal *s = SIGI_VERSAL(obj);
+    //SigiVersal *s = SIGI_VERSAL(obj);
 
-    memory_region_init(&s->cpu_subsys.apu.mr, obj, "mr-apu", UINT64_MAX);
-    memory_region_init(&s->mcu_subsys.rpu.mr, obj, "mr-rpu", UINT64_MAX);
-    memory_region_init(&s->mr_ps, obj, "mr-ps-switch", UINT64_MAX);
+    //memory_region_init(&s->cpu_subsys.apu.mr, obj, "mr-apu", UINT64_MAX);
+    //memory_region_init(&s->mcu_subsys.rpu.mr, obj, "mr-rpu", UINT64_MAX);
+    //memory_region_init(&s->mr_ps, obj, "mr-ps-switch", UINT64_MAX);
 }
 
 static Property sigi_versal_properties[] = {
