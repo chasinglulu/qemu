@@ -113,9 +113,9 @@ struct SigiVersal {
 #define MM_PERI_DW_PCIE_CFG_SIZE    0x400000
 
 /* ECAM-based PCIe host controller*/
-#define MM_PERI_PCIE_CFG            0x60000000U
-#define MM_PERI_PCIE_CFG_SIZE       0x00ff0000U
-#define MM_PERI_PCIE_MMIO           0x70000000U
+#define MM_PERI_PCIE_CFG            0x59C00000U
+#define MM_PERI_PCIE_CFG_SIZE       0x400000
+#define MM_PERI_PCIE_MMIO           0x60000000U
 #define MM_PERI_PCIE_MMIO_SIZE      0x10000000U
 #define MM_PERI_PCIE_MMIO_HIGH      0x480000000ULL
 #define MM_PERI_PCIE_MMIO_HIGH_SIZE 0x100000000ULL

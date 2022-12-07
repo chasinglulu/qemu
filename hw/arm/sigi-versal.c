@@ -289,12 +289,9 @@ static void versal_create_pcie(SigiVersal *s, qemu_irq *pic)
     MemoryRegion *ecam_reg;
     int i;
 
-    //dev = qdev_new(TYPE_GPEX_HOST);
-    //sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     object_initialize_child(OBJECT(s), "pcie", &s->cpu_subsys.peri.pcie,
                                 TYPE_GPEX_HOST);
     dev = DEVICE(&s->cpu_subsys.peri.pcie);
-    //object_property_set_bool(OBJECT(dev), "allow-unmapped-accesses", false, NULL);
     sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
     /* Map only the first size_ecam bytes of ECAM space */
@@ -322,17 +319,6 @@ static void versal_create_pcie(SigiVersal *s, qemu_irq *pic)
                              mmio_reg, MM_PERI_PCIE_MMIO_HIGH, MM_PERI_PCIE_MMIO_HIGH_SIZE);
     memory_region_add_subregion(get_system_memory(), MM_PERI_PCIE_MMIO_HIGH,
                                 high_mmio_alias);
-
-#if 0
-    pci_dev = pci_new(-1, TYPE_NVME);
-    qdev_prop_set_string(&pci_dev->qdev, "serial", "deadbeef");
-    pci_realize_and_unref(pci_dev, PCI_HOST_BRIDGE(dev)->bus, &error_fatal);
-    //mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
-    //memory_region_add_subregion(get_system_memory(), MM_PERI_PCIE_MMIO, mr);
-
-    //pci_create_simple(PCI_HOST_BRIDGE(dev)->bus, -1, TYPE_NVME);
-    //sysbus_mmio_map(SYS_BUS_DEVICE(dev), 2, 0x60ff0000);
-#endif
 
     for (i = 0; i < ARRAY_SIZE(irqs); i++) {
         sysbus_connect_irq(SYS_BUS_DEVICE(dev), i, pic[irqs[i]]);
