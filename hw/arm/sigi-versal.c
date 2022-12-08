@@ -102,8 +102,6 @@ static void versal_create_its(SigiVersal *s)
     DeviceState *dev;
     MemoryRegion *mr;
 
-    printf("itsclass: %s\n", itsclass);
-
     if (strcmp(itsclass, "arm-gicv3-its")) {
             itsclass = NULL;
     }
@@ -243,6 +241,39 @@ static void versal_create_uarts(SigiVersal *s, qemu_irq *pic)
         qdev_prop_set_uint32(dev, "baudbase", 115200);
         qdev_prop_set_uint8(dev, "endianness", DEVICE_LITTLE_ENDIAN);
         qdev_prop_set_chr(dev, "chardev", serial_hd(i));
+        sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+        mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+        memory_region_add_subregion(get_system_memory(), addrs[i], mr);
+
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, pic[irqs[i]]);
+        g_free(name);
+    }
+}
+
+static void versal_create_gems(SigiVersal *s, qemu_irq *pic)
+{
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(s->cpu_subsys.peri.gem); i++) {
+        static const int irqs[] = { VERSAL_ETH0_IRQ_0, VERSAL_ETH1_IRQ_0};
+        static const uint64_t addrs[] = { MM_PERI_ETH0, MM_PERI_ETH1 };
+        char *name = g_strdup_printf("gem%d", i);
+        NICInfo *nd = &nd_table[i];
+        DeviceState *dev;
+        MemoryRegion *mr;
+
+        object_initialize_child(OBJECT(s), name, &s->cpu_subsys.peri.gem[i],
+                                TYPE_CADENCE_GEM);
+        dev = DEVICE(&s->cpu_subsys.peri.gem[i]);
+        /* FIXME use qdev NIC properties instead of nd_table[] */
+        if (nd->used) {
+            qemu_check_nic_model(nd, "cadence_gem");
+            qdev_set_nic_properties(dev, nd);
+        }
+        object_property_set_int(OBJECT(dev), "phy-addr", 23, &error_abort);
+        object_property_set_int(OBJECT(dev), "num-priority-queues", 2,
+                                &error_abort);
         sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
         mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
@@ -403,6 +434,7 @@ static void sigi_versal_realize(DeviceState *dev, Error **errp)
     versal_create_rpu_cpus(s);
     versal_create_uarts(s, pic);
     versal_create_sdhci(s, pic);
+    versal_create_gems(s, pic);
     //versal_create_dw_pcie(s, pic);
     versal_create_pcie(s, pic);
     versal_map_ddr(s);

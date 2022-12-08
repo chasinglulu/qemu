@@ -21,7 +21,7 @@
 #include "hw/sd/cadence_sdhci.h"
 #include "hw/pci-host/designware.h"
 #include "hw/pci-host/gpex.h"
-#include "hw/nvme/nvme.h"
+#include "hw/net/cadence_gem.h"
 
 #define TYPE_SIGI_VERSAL "sigi-versal"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVersal, SIGI_VERSAL)
@@ -30,6 +30,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(SigiVersal, SIGI_VERSAL)
 #define SIGI_VERSAL_NR_RCPUS    4
 #define SIGI_VERSAL_NR_UARTS    2
 #define SIGI_VERSAL_NR_SDHCI    2
+#define SIGI_VERSAL_NR_GEMS     2
 #define SIGI_VERSAL_NR_IRQS     192
 
 struct SigiVersal {
@@ -46,7 +47,7 @@ struct SigiVersal {
             CadenceSDHCIState mmc[SIGI_VERSAL_NR_SDHCI];
             DesignwarePCIEHost dw_pcie;
             GPEXHost pcie;
-            NvmeCtrl nvme;
+            CadenceGEMState gem[SIGI_VERSAL_NR_GEMS];
         } peri;
         struct {
             CPUClusterState cluster;
@@ -83,9 +84,11 @@ struct SigiVersal {
 #define VERSAL_TIMER_NS_EL1_IRQ     14
 #define VERSAL_TIMER_NS_EL2_IRQ     10
 
+#define VERSAL_ETH0_IRQ_0           40
 #define VERSAL_UART0_IRQ_0          73
 #define VERSAL_UART1_IRQ_0          74
 #define VERSAL_SDHCI0_IRQ_0         120
+#define VERSAL_ETH1_IRQ_0           124
 #define VERSAL_PCIE_IRQ_A           127
 #define VERSAL_PCIE_IRQ_B           128
 #define VERSAL_PCIE_IRQ_C           129
@@ -105,6 +108,12 @@ struct SigiVersal {
 
 #define MM_PERI_SDHCI0              0x48030000U
 #define MM_PERI_SDHCI0_SIZE         0x10000
+
+#define MM_PERI_ETH0                0x59110000U
+#define MM_PERI_ETH0_SIZE           0x10000
+#define MM_PERI_ETH1                0x59120000U
+#define MM_PERI_ETH1_SIZE           0x10000
+
 #define MM_PERI_DW_PCIE             0x48070000U
 #define MM_PERI_DW_PCIE_SIZE        0x1000
 #define MM_PERI_DW_PCIE_PHY         0x48071000U
