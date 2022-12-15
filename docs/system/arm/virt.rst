@@ -53,6 +53,7 @@ Supported guest CPU types:
 - ``cortex-a7`` (32-bit)
 - ``cortex-a15`` (32-bit; the default)
 - ``cortex-a53`` (64-bit)
+- ``cortex-a55`` (64-bit)
 - ``cortex-a57`` (64-bit)
 - ``cortex-a72`` (64-bit)
 - ``cortex-a76`` (64-bit)
