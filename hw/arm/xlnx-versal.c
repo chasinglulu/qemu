@@ -272,6 +272,10 @@ static void versal_create_admas(Versal *s, qemu_irq *pic)
 }
 
 #define SDHCI_CAPABILITIES  0x280737ec6481 /* Same as on ZynqMP.  */
+#define SDHCI_EMMC_CAPS (((uint64_t)SDHCI_CAPABILITIES & ~(3UL << 30)) | \
+                    (1UL << 30))
+
+
 static void versal_create_sds(Versal *s, qemu_irq *pic)
 {
     int i;
@@ -284,11 +288,17 @@ static void versal_create_sds(Versal *s, qemu_irq *pic)
                                 TYPE_SYSBUS_SDHCI);
         dev = DEVICE(&s->pmc.iou.sd[i]);
 
+        dev->id = g_strdup_printf("sdhci%d", i);
         object_property_set_uint(OBJECT(dev), "sd-spec-version", 3,
                                  &error_fatal);
-        object_property_set_uint(OBJECT(dev), "capareg", SDHCI_CAPABILITIES,
+        object_property_set_uint(OBJECT(dev), "capareg", SDHCI_EMMC_CAPS,
                                  &error_fatal);
-        object_property_set_uint(OBJECT(dev), "uhs", UHS_I, &error_fatal);
+        /*
+         * UHS is not applicable for eMMC
+         */
+        if (!s->cfg.has_emmc || i == 1) {
+            object_property_set_uint(OBJECT(dev), "uhs", UHS_I, &error_fatal);
+        }
         sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
         mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
@@ -758,6 +768,7 @@ static void versal_init(Object *obj)
 static Property versal_properties[] = {
     DEFINE_PROP_LINK("ddr", Versal, cfg.mr_ddr, TYPE_MEMORY_REGION,
                      MemoryRegion *),
+    DEFINE_PROP_BOOL("has-emmc", Versal, cfg.has_emmc, false),
     DEFINE_PROP_END_OF_LIST()
 };
 
