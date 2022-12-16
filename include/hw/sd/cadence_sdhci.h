@@ -36,6 +36,7 @@ typedef struct CadenceSDHCIState {
     BusState *bus;
 
     uint32_t regs[CADENCE_SDHCI_NUM_REGS];
+    uint8_t index;
 
     SDHCIState sdhci;
 } CadenceSDHCIState;
