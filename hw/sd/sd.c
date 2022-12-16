@@ -338,9 +338,9 @@ static void sd_set_ocr(SDState *sd)
     /* All voltages OK */
     sd->ocr = R_OCR_VDD_VOLTAGE_WIN_HI_MASK;
 
-    if (sd->spi) {
+    if (sd->spi || !strcmp(sd_proto(sd)->name, "eMMC")) {
         /*
-         * We don't need to emulate power up sequence in SPI-mode.
+         * We don't need to emulate power up sequence in SPI-mode or eMMC.
          * Thus, the card's power up status bit should be set to 1 when reset.
          * The card's capacity status bit should also be set if SD card size
          * is larger than 2GB for SDHC support.
@@ -2237,6 +2237,13 @@ uint8_t sd_read_byte(SDState *sd)
             sd->state = sd_transfer_state;
         break;
 
+    case 8:
+        ret = sd->data[sd->data_offset ++];
+
+        if (sd->data_offset >= 512)
+            sd->state = sd_transfer_state;
+        break;
+
     case 9:	/* CMD9:   SEND_CSD */
     case 10:	/* CMD10:  SEND_CID */
         ret = sd->data[sd->data_offset ++];
@@ -2498,7 +2505,8 @@ static void sd_realize(DeviceState *dev, Error **errp)
     SDCardClass *sc = SD_CARD_GET_CLASS(sd);
     int ret;
 
-    sc->proto = sd->spi ? &sd_proto_spi : &sd_proto_sd;
+    if (sd->spi)
+        sc->proto = &sd_proto_spi;
 
     switch (sd->spec_version) {
     case SD_PHY_SPECv1_10_VERS
@@ -2572,6 +2580,7 @@ static void sd_class_init(ObjectClass *klass, void *data)
     dc->reset = sd_reset;
     dc->bus_type = TYPE_SD_BUS;
     set_bit(DEVICE_CATEGORY_STORAGE, dc->categories);
+    sc->proto = &sd_proto_sd;
 
     sc->set_voltage = sd_set_voltage;
     sc->get_dat_lines = sd_get_dat_lines;
