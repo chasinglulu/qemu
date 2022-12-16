@@ -45,6 +45,7 @@ struct VersalVirt {
 
     struct {
         bool secure;
+        bool has_emmc;
     } cfg;
 };
 
@@ -332,6 +333,15 @@ static void fdt_add_sd_nodes(VersalVirt *s)
         qemu_fdt_setprop_sized_cells(s->fdt, name, "reg",
                                      2, addr, 2, MM_PMC_SD0_SIZE);
         qemu_fdt_setprop(s->fdt, name, "compatible", compat, sizeof(compat));
+        /*
+         * eMMC specific properties
+         */
+        if (s->cfg.has_emmc && i == 0) {
+            qemu_fdt_setprop(s->fdt, name, "non-removable", NULL, 0);
+            qemu_fdt_setprop(s->fdt, name, "no-sdio", NULL, 0);
+            qemu_fdt_setprop(s->fdt, name, "no-sd", NULL, 0);
+            qemu_fdt_setprop_sized_cells(s->fdt, name, "bus-width", 1, 8);
+        }
         g_free(name);
     }
 }
@@ -602,6 +612,13 @@ static void sd_plugin_card(SDHCIState *sd, DriveInfo *di)
                            &error_fatal);
 }
 
+static void versal_virt_set_emmc(Object *obj, bool value, Error **errp)
+{
+    VersalVirt *s = XLNX_VERSAL_VIRT_MACHINE(obj);
+
+    s->cfg.has_emmc = value;
+}
+
 static void versal_virt_init(MachineState *machine)
 {
     VersalVirt *s = XLNX_VERSAL_VIRT_MACHINE(machine);
@@ -639,6 +656,8 @@ static void versal_virt_init(MachineState *machine)
                             TYPE_XLNX_VERSAL);
     object_property_set_link(OBJECT(&s->soc), "ddr", OBJECT(machine->ram),
                              &error_abort);
+    object_property_set_bool(OBJECT(&s->soc), "has-emmc", s->cfg.has_emmc,
+                             &error_abort);
     sysbus_realize(SYS_BUS_DEVICE(&s->soc), &error_fatal);
 
     fdt_create(s);
@@ -669,11 +688,13 @@ static void versal_virt_init(MachineState *machine)
     /* Attach efuse backend, if given */
     efuse_attach_drive(&s->soc.pmc.efuse);
 
-    /* Plugin SD cards.  */
-    for (i = 0; i < ARRAY_SIZE(s->soc.pmc.iou.sd); i++) {
-        sd_plugin_card(&s->soc.pmc.iou.sd[i],
-                       drive_get(IF_SD, 0, i));
+    if (!s->cfg.has_emmc) {
+        sd_plugin_card(&s->soc.pmc.iou.sd[0],
+            drive_get(IF_SD, 0, 0));
     }
+    /* Plugin SD cards.  */
+    sd_plugin_card(&s->soc.pmc.iou.sd[1],
+            drive_get(IF_SD, 0, s->cfg.has_emmc? 0 : 1));
 
     s->binfo.ram_size = machine->ram_size;
     s->binfo.loader_start = 0x0;
@@ -725,6 +746,8 @@ static void versal_virt_machine_class_init(ObjectClass *oc, void *data)
     mc->default_cpus = XLNX_VERSAL_NR_ACPUS + XLNX_VERSAL_NR_RCPUS;
     mc->no_cdrom = true;
     mc->default_ram_id = "ddr";
+    object_class_property_add_bool(oc, "emmc", NULL,
+		    versal_virt_set_emmc);
 }
 
 static const TypeInfo versal_virt_machine_init_typeinfo = {
