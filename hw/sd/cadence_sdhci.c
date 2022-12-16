@@ -27,6 +27,7 @@
 #include "migration/vmstate.h"
 #include "hw/sd/cadence_sdhci.h"
 #include "sdhci-internal.h"
+#include "hw/qdev-properties.h"
 
 /* HRS - Host Register Set (specific to Cadence) */
 
@@ -138,7 +139,9 @@ static void cadence_sdhci_realize(DeviceState *dev, Error **errp)
     CadenceSDHCIState *s = CADENCE_SDHCI(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
     SysBusDevice *sbd_sdhci = SYS_BUS_DEVICE(&s->sdhci);
+    DeviceState *sdev = DEVICE(&s->sdhci);
 
+    sdev->id = g_strdup_printf("cdns-sdhci%d", s->index);
     memory_region_init(&s->container, OBJECT(s),
                        "cadence.sdhci-container", 0x1000);
     sysbus_init_mmio(sbd, &s->container);
@@ -147,6 +150,8 @@ static void cadence_sdhci_realize(DeviceState *dev, Error **errp)
                           s, TYPE_CADENCE_SDHCI, CADENCE_SDHCI_REG_SIZE);
     memory_region_add_subregion(&s->container, 0, &s->iomem);
 
+    object_property_set_uint(OBJECT(sdev), "sd-spec-version", 3,
+                                 &error_fatal);
     sysbus_realize(sbd_sdhci, errp);
     memory_region_add_subregion(&s->container, CADENCE_SDHCI_SRS_BASE,
                                 sysbus_mmio_get_region(sbd_sdhci, 0));
@@ -165,6 +170,11 @@ static const VMStateDescription vmstate_cadence_sdhci = {
     },
 };
 
+static Property cdns_sdhci_properties[] = {
+    DEFINE_PROP_UINT8("index", CadenceSDHCIState, index, 0),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
 static void cadence_sdhci_class_init(ObjectClass *classp, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(classp);
@@ -173,6 +183,7 @@ static void cadence_sdhci_class_init(ObjectClass *classp, void *data)
     dc->realize = cadence_sdhci_realize;
     dc->reset = cadence_sdhci_reset;
     dc->vmsd = &vmstate_cadence_sdhci;
+    device_class_set_props(dc, cdns_sdhci_properties);
 }
 
 static const TypeInfo cadence_sdhci_info = {
