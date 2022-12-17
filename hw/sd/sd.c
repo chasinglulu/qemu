@@ -471,18 +471,20 @@ static void sd_emmc_set_csd(SDState *sd, uint64_t size)
         sd->csd[5] = 0x5a;
         sd->csd[6] = 0x80 | ((csize1k >> 10) & 0xf);
         sd->csd[7] = (csize1k >> 2) & 0xff;
+        sd->csd[12] = 0x92;
+        sd->csd[13] = 0xa0;
     } else { /* >= 2GB : size stored in ext CSD, block addressing */
         sd->csd[5] = 0x59;
         sd->csd[6] = 0x8f;
         sd->csd[7] = 0xff;
+        sd->csd[12] = 0x0a;
+        sd->csd[13] = 0x40;
         sd->ocr = FIELD_DP32(sd->ocr, OCR, CARD_CAPACITY, 1);
     }
     sd->csd[8] = 0xff;
     sd->csd[9] = 0xff;
     sd->csd[10] = 0xf7;
     sd->csd[11] = 0xfe;
-    sd->csd[12] = 0x49;
-    sd->csd[13] = 0x10;
     sd->csd[14] = 0x00;
     sd->csd[15] = (sd_crc7(sd->csd, 15) << 1) | 1;
     mmc_set_ext_csd(sd, size);
