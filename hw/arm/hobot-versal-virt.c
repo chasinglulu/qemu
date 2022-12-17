@@ -47,8 +47,16 @@ struct HobotVersalVirt {
 
     struct {
         bool secure;
+        bool has_emmc;
     } cfg;
 };
+
+static void versal_virt_set_emmc(Object *obj, bool value, Error **errp)
+{
+    HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(obj);
+
+    s->cfg.has_emmc = value;
+}
 
 static void fdt_create(HobotVersalVirt *s)
 {
@@ -211,6 +219,15 @@ static void fdt_add_sdhci_nodes(HobotVersalVirt *s)
         qemu_fdt_setprop_sized_cells(s->fdt, name, "reg",
                                      2, addr, 2, MM_PERI_SDHCI0_SIZE);
         qemu_fdt_setprop(s->fdt, name, "compatible", compat, sizeof(compat));
+        /*
+         * eMMC specific properties
+         */
+        if (s->cfg.has_emmc && i == 0) {
+            qemu_fdt_setprop(s->fdt, name, "non-removable", NULL, 0);
+            qemu_fdt_setprop(s->fdt, name, "no-sdio", NULL, 0);
+            qemu_fdt_setprop(s->fdt, name, "no-sd", NULL, 0);
+            qemu_fdt_setprop_sized_cells(s->fdt, name, "bus-width", 1, 8);
+        }
         g_free(name);
     }
 }
@@ -354,7 +371,6 @@ static void versal_virt_init(MachineState *machine)
 {
     HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(machine);
     int psci_conduit = QEMU_PSCI_CONDUIT_DISABLED;
-    int i;
 
     /*
      * If the user provides an Operating System to be loaded, we expect them
@@ -387,6 +403,8 @@ static void versal_virt_init(MachineState *machine)
                             TYPE_SIGI_VERSAL);
     object_property_set_link(OBJECT(&s->soc), "ddr", OBJECT(machine->ram),
                              &error_abort);
+    object_property_set_bool(OBJECT(&s->soc), "has-emmc", s->cfg.has_emmc,
+                             &error_abort);
 
     if (!machine->kernel_filename) {
         object_property_set_bool(OBJECT(&s->soc), "secure", false, NULL);
@@ -407,16 +425,13 @@ static void versal_virt_init(MachineState *machine)
     fdt_add_clk_node(s, "/clk25", 25000000, s->phandle.clk_25Mhz);
     fdt_add_clk_node(s, "/clk200", 200000000, s->phandle.clk_200Mhz);
 
-    /* Make the APU cpu address space visible to virtio and other
-     * modules unaware of muliple address-spaces.  */
-    //memory_region_add_subregion_overlap(get_system_memory(),
-    //                                    0, &s->soc.cpu_subsys.apu.mr, 0);
-
-    /* Plugin SD cards.  */
-    for (i = 0; i < ARRAY_SIZE(s->soc.cpu_subsys.peri.mmc); i++) {
-        sd_plugin_card(&s->soc.cpu_subsys.peri.mmc[i],
-                       drive_get(IF_SD, 0, i));
+    if (!s->cfg.has_emmc) {
+        sd_plugin_card(&s->soc.cpu_subsys.peri.mmc[0],
+            drive_get(IF_SD, 0, 0));
     }
+    /* Plugin SD cards.  */
+    sd_plugin_card(&s->soc.cpu_subsys.peri.mmc[1],
+            drive_get(IF_SD, 0, s->cfg.has_emmc? 0 : 1));
 
     s->binfo.ram_size = machine->ram_size;
     s->binfo.loader_start = MM_TOP_DDR;
@@ -438,7 +453,6 @@ static void versal_virt_init(MachineState *machine)
 
 static void versal_virt_machine_instance_init(Object *obj)
 {
-    //object_property_set_str(obj, "dumpdtb", "dumpdtb.dtb", NULL);
 }
 
 static void versal_virt_machine_class_init(ObjectClass *oc, void *data)
@@ -452,6 +466,9 @@ static void versal_virt_machine_class_init(ObjectClass *oc, void *data)
     mc->default_cpus = SIGI_VERSAL_NR_ACPUS + SIGI_VERSAL_NR_RCPUS;
     mc->no_cdrom = true;
     mc->default_ram_id = "ddr";
+    mc->no_sdcard = 1;      // disable default_sdcard
+    object_class_property_add_bool(oc, "emmc", NULL,
+		    versal_virt_set_emmc);
 }
 
 static const TypeInfo versal_virt_machine_init_typeinfo = {

@@ -357,7 +357,6 @@ static void versal_create_pcie(SigiVersal *s, qemu_irq *pic)
     }
 }
 
-#define SDHCI_CAPABILITIES 0x70146ec800
 static void versal_create_sdhci(SigiVersal *s, qemu_irq *pic)
 {
     int i;
@@ -369,6 +368,9 @@ static void versal_create_sdhci(SigiVersal *s, qemu_irq *pic)
         object_initialize_child(OBJECT(s), "sdhci[*]", &s->cpu_subsys.peri.mmc[i],
                                 TYPE_CADENCE_SDHCI);
         dev = DEVICE(&s->cpu_subsys.peri.mmc[i]);
+        dev->id = g_strdup_printf("sdhci%d", i);
+        object_property_set_uint(OBJECT(dev), "index", i,
+                                 &error_fatal);
 
         sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
@@ -455,6 +457,7 @@ static void sigi_versal_init(Object *obj)
 static Property sigi_versal_properties[] = {
     DEFINE_PROP_LINK("ddr", SigiVersal, cfg.mr_ddr, TYPE_MEMORY_REGION,
                      MemoryRegion *),
+    DEFINE_PROP_BOOL("has-emmc", SigiVersal, cfg.has_emmc, false),
     DEFINE_PROP_END_OF_LIST()
 };
 
