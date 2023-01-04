@@ -1,7 +1,7 @@
 /*
- * Hobot Versal Virtual board.
+ * Hobot Sigi Virtual Development Board.
  *
- * Copyright (c) 2022 Hobot Inc.
+ * Copyright (C) 2022 Hobot Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 or
@@ -23,10 +23,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define TYPE_HOBOT_VERSAL_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-versal-virt")
-OBJECT_DECLARE_SIMPLE_TYPE(HobotVersalVirt, HOBOT_VERSAL_VIRT_MACHINE)
+#define TYPE_HOBOT_SIGI_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-sigi-virt")
+OBJECT_DECLARE_SIMPLE_TYPE(HobotSigiVirt, HOBOT_SIGI_VIRT_MACHINE)
 
-struct HobotVersalVirt {
+struct HobotSigiVirt {
     MachineState parent_obj;
     Notifier machine_done;
 
@@ -51,14 +51,14 @@ struct HobotVersalVirt {
     } cfg;
 };
 
-static void versal_virt_set_emmc(Object *obj, bool value, Error **errp)
+static void sigi_virt_set_emmc(Object *obj, bool value, Error **errp)
 {
-    HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(obj);
+    HobotSigiVirt *s = HOBOT_SIGI_VIRT_MACHINE(obj);
 
     s->cfg.has_emmc = value;
 }
 
-static void fdt_create(HobotVersalVirt *s)
+static void fdt_create(HobotSigiVirt *s)
 {
     MachineClass *mc = MACHINE_GET_CLASS(s);
     int i;
@@ -91,7 +91,7 @@ static void fdt_create(HobotVersalVirt *s)
     qemu_fdt_setprop_string(s->fdt, "/", "compatible", "hobot-versal-virt");
 }
 
-static void fdt_add_clk_node(HobotVersalVirt *s, const char *name,
+static void fdt_add_clk_node(HobotSigiVirt *s, const char *name,
                              unsigned int freq_hz, uint32_t phandle)
 {
     qemu_fdt_add_subnode(s->fdt, name);
@@ -102,7 +102,7 @@ static void fdt_add_clk_node(HobotVersalVirt *s, const char *name,
     qemu_fdt_setprop(s->fdt, name, "u-boot,dm-pre-reloc", NULL, 0);
 }
 
-static void fdt_add_cpu_nodes(HobotVersalVirt *s, uint32_t psci_conduit)
+static void fdt_add_cpu_nodes(HobotSigiVirt *s, uint32_t psci_conduit)
 {
     int i;
 
@@ -126,7 +126,7 @@ static void fdt_add_cpu_nodes(HobotVersalVirt *s, uint32_t psci_conduit)
     }
 }
 
-static void fdt_add_gic_nodes(HobotVersalVirt *s)
+static void fdt_add_gic_nodes(HobotSigiVirt *s)
 {
     char *nodename;
 
@@ -147,7 +147,7 @@ static void fdt_add_gic_nodes(HobotVersalVirt *s)
     g_free(nodename);
 }
 
-static void fdt_add_timer_nodes(HobotVersalVirt *s)
+static void fdt_add_timer_nodes(HobotSigiVirt *s)
 {
     const char compat[] = "arm,armv8-timer";
     uint32_t irqflags = GIC_FDT_IRQ_FLAGS_LEVEL_HI;
@@ -162,7 +162,7 @@ static void fdt_add_timer_nodes(HobotVersalVirt *s)
                      compat, sizeof(compat));
 }
 
-static void fdt_add_uart_nodes(HobotVersalVirt *s)
+static void fdt_add_uart_nodes(HobotSigiVirt *s)
 {
     uint64_t addrs[] = { MM_UART1, MM_UART0 };
     uint64_t size[] = {MM_UART1_SIZE, MM_UART0_SIZE};
@@ -195,7 +195,7 @@ static void fdt_add_uart_nodes(HobotVersalVirt *s)
     }
 }
 
-static void fdt_add_sdhci_nodes(HobotVersalVirt *s)
+static void fdt_add_sdhci_nodes(HobotSigiVirt *s)
 {
     const char compat[] = "cdns,sd4hc";
     int i;
@@ -252,7 +252,7 @@ static void fdt_nop_memory_nodes(void *fdt, Error **errp)
     g_strfreev(node_path);
 }
 
-static void fdt_add_memory_nodes(HobotVersalVirt *s, void *fdt, uint64_t ram_size)
+static void fdt_add_memory_nodes(HobotSigiVirt *s, void *fdt, uint64_t ram_size)
 {
     /* Describes the various split DDR access regions.  */
     static const struct {
@@ -325,26 +325,26 @@ static void fdt_add_memory_nodes(HobotVersalVirt *s, void *fdt, uint64_t ram_siz
     g_free(name);
 }
 
-static void versal_virt_modify_dtb(const struct arm_boot_info *binfo,
+static void sigi_virt_modify_dtb(const struct arm_boot_info *binfo,
                                     void *fdt)
 {
-    HobotVersalVirt *s = container_of(binfo, HobotVersalVirt, binfo);
+    HobotSigiVirt *s = container_of(binfo, HobotSigiVirt, binfo);
 
     fdt_add_memory_nodes(s, fdt, binfo->ram_size);
 }
 
-static void *versal_virt_get_dtb(const struct arm_boot_info *binfo,
+static void *sigi_virt_get_dtb(const struct arm_boot_info *binfo,
                                   int *fdt_size)
 {
-    const HobotVersalVirt *board = container_of(binfo, HobotVersalVirt, binfo);
+    const HobotSigiVirt *board = container_of(binfo, HobotSigiVirt, binfo);
 
     *fdt_size = board->fdt_size;
     return board->fdt;
 }
 
-static void versal_virt_machine_done(Notifier *notifier, void *data)
+static void sigi_virt_machine_done(Notifier *notifier, void *data)
 {
-    HobotVersalVirt *s = container_of(notifier, HobotVersalVirt,
+    HobotSigiVirt *s = container_of(notifier, HobotSigiVirt,
                                     machine_done);
     MachineState *ms = MACHINE(s);
     ARMCPU *cpu = ARM_CPU(first_cpu);
@@ -367,9 +367,9 @@ static void sd_plugin_card(CadenceSDHCIState *cdns, DriveInfo *di)
     qdev_realize_and_unref(card, cdns->bus, &error_fatal);
 }
 
-static void versal_virt_init(MachineState *machine)
+static void sigi_virt_init(MachineState *machine)
 {
-    HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(machine);
+    HobotSigiVirt *s = HOBOT_SIGI_VIRT_MACHINE(machine);
     int psci_conduit = QEMU_PSCI_CONDUIT_DISABLED;
 
     /*
@@ -435,8 +435,8 @@ static void versal_virt_init(MachineState *machine)
 
     s->binfo.ram_size = machine->ram_size;
     s->binfo.loader_start = MM_TOP_DDR;
-    s->binfo.get_dtb = versal_virt_get_dtb;
-    s->binfo.modify_dtb = versal_virt_modify_dtb;
+    s->binfo.get_dtb = sigi_virt_get_dtb;
+    s->binfo.modify_dtb = sigi_virt_modify_dtb;
     s->binfo.psci_conduit = psci_conduit;
     if (!machine->kernel_filename) {
         s->binfo.psci_conduit = QEMU_PSCI_CONDUIT_SMC;
@@ -446,21 +446,21 @@ static void versal_virt_init(MachineState *machine)
     arm_load_kernel(&s->soc.cpu_subsys.apu.cpu[0], machine, &s->binfo);
 
      if (!machine->kernel_filename) {
-        s->machine_done.notify = versal_virt_machine_done;
+        s->machine_done.notify = sigi_virt_machine_done;
         qemu_add_machine_init_done_notifier(&s->machine_done);
      }
 }
 
-static void versal_virt_machine_instance_init(Object *obj)
+static void sigi_virt_machine_instance_init(Object *obj)
 {
 }
 
-static void versal_virt_machine_class_init(ObjectClass *oc, void *data)
+static void sigi_virt_machine_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
 
-    mc->desc = "Hobot Versal Virtual development board";
-    mc->init = versal_virt_init;
+    mc->desc = "Hobot Sigi Virtual Development Board";
+    mc->init = sigi_virt_init;
     mc->min_cpus = SIGI_VERSAL_NR_ACPUS + SIGI_VERSAL_NR_RCPUS;
     mc->max_cpus = SIGI_VERSAL_NR_ACPUS + SIGI_VERSAL_NR_RCPUS;
     mc->default_cpus = SIGI_VERSAL_NR_ACPUS + SIGI_VERSAL_NR_RCPUS;
@@ -468,20 +468,20 @@ static void versal_virt_machine_class_init(ObjectClass *oc, void *data)
     mc->default_ram_id = "ddr";
     mc->no_sdcard = 1;      // disable default_sdcard
     object_class_property_add_bool(oc, "emmc", NULL,
-		    versal_virt_set_emmc);
+		    sigi_virt_set_emmc);
 }
 
-static const TypeInfo versal_virt_machine_init_typeinfo = {
-    .name       = TYPE_HOBOT_VERSAL_VIRT_MACHINE,
+static const TypeInfo sigi_virt_machine_init_typeinfo = {
+    .name       = TYPE_HOBOT_SIGI_VIRT_MACHINE,
     .parent     = TYPE_MACHINE,
-    .class_init = versal_virt_machine_class_init,
-    .instance_init = versal_virt_machine_instance_init,
-    .instance_size = sizeof(HobotVersalVirt),
+    .class_init = sigi_virt_machine_class_init,
+    .instance_init = sigi_virt_machine_instance_init,
+    .instance_size = sizeof(HobotSigiVirt),
 };
 
-static void versal_virt_machine_init_register_types(void)
+static void sigi_virt_machine_init_register_types(void)
 {
-    type_register_static(&versal_virt_machine_init_typeinfo);
+    type_register_static(&sigi_virt_machine_init_typeinfo);
 }
 
-type_init(versal_virt_machine_init_register_types)
+type_init(sigi_virt_machine_init_register_types)
