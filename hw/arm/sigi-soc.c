@@ -1,5 +1,5 @@
 /*
- * Sigi Versal SoC model.
+ * Hobot Sigi SoC model.
  *
  * Copyright (c) 2022 Hobot Inc.
  *
@@ -21,44 +21,44 @@
 #include "hw/arm/boot.h"
 #include "kvm_arm.h"
 #include "hw/misc/unimp.h"
-#include "hw/arm/sigi-versal.h"
+#include "hw/arm/sigi-soc.h"
 #include "qemu/log.h"
 #include "hw/misc/unimp.h"
 #include "hw/nvme/nvme.h"
 
 
-#define SIGI_VERSAL_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a78ae")
-#define SIGI_VERSAL_RCPU_TYPE ARM_CPU_TYPE_NAME("cortex-r52")
+#define SIGI_SOC_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a78ae")
+#define SIGI_SOC_RCPU_TYPE ARM_CPU_TYPE_NAME("cortex-r52")
 
 static bool virt_get_secure(Object *obj, Error **errp)
 {
-    SigiVersal *s = SIGI_VERSAL(obj);
+    SigiSoC *s = SIGI_SOC(obj);
 
     return s->secure;
 }
 
 static void virt_set_secure(Object *obj, bool value, Error **errp)
 {
-    SigiVersal *s = SIGI_VERSAL(obj);
+    SigiSoC *s = SIGI_SOC(obj);
 
     s->secure = value;
 }
 
 static bool virt_get_virt(Object *obj, Error **errp)
 {
-    SigiVersal *s = SIGI_VERSAL(obj);
+    SigiSoC *s = SIGI_SOC(obj);
 
     return s->virt;
 }
 
 static void virt_set_virt(Object *obj, bool value, Error **errp)
 {
-    SigiVersal *s = SIGI_VERSAL(obj);
+    SigiSoC *s = SIGI_SOC(obj);
 
     s->virt = value;
 }
 
-static void versal_create_apu_cpus(SigiVersal *s)
+static void virt_create_apu_cpus(SigiSoC *s)
 {
     int i;
 
@@ -71,7 +71,7 @@ static void versal_create_apu_cpus(SigiVersal *s)
 
         object_initialize_child(OBJECT(&s->cpu_subsys.apu.cluster),
                                 "apu-cpu[*]", &s->cpu_subsys.apu.cpu[i],
-                                SIGI_VERSAL_ACPU_TYPE);
+                                SIGI_SOC_ACPU_TYPE);
         obj = OBJECT(&s->cpu_subsys.apu.cpu[i]);
         if (i) {
             /* Secondary CPUs start in powered-down state */
@@ -96,7 +96,7 @@ static void versal_create_apu_cpus(SigiVersal *s)
     qdev_realize(DEVICE(&s->cpu_subsys.apu.cluster), NULL, &error_fatal);
 }
 
-static void versal_create_its(SigiVersal *s)
+static void virt_create_its(SigiSoC *s)
 {
     const char *itsclass = its_class_name();
     DeviceState *dev;
@@ -122,7 +122,7 @@ static void versal_create_its(SigiVersal *s)
     memory_region_add_subregion(get_system_memory(), MM_GIC_ITS, mr);
 }
 
-static void versal_create_apu_gic(SigiVersal *s, qemu_irq *pic)
+static void virt_create_apu_gic(SigiSoC *s, qemu_irq *pic)
 {
     static const uint64_t addrs[] = {
         MM_GIC_APU_DIST_MAIN,
@@ -139,7 +139,7 @@ static void versal_create_apu_gic(SigiVersal *s, qemu_irq *pic)
     gicdev = DEVICE(&s->cpu_subsys.apu.gic);
     qdev_prop_set_uint32(gicdev, "revision", 3);
     qdev_prop_set_uint32(gicdev, "num-cpu", nr_apu_cpus);
-    qdev_prop_set_uint32(gicdev, "num-irq", SIGI_VERSAL_NR_IRQS + 32);
+    qdev_prop_set_uint32(gicdev, "num-irq", SIGI_SOC_NR_IRQS + 32);
     qdev_prop_set_uint32(gicdev, "len-redist-region-count", 1);
     qdev_prop_set_uint32(gicdev, "redist-region-count[0]", nr_apu_cpus);
     object_property_set_link(OBJECT(gicdev), "sysmem", OBJECT(get_system_memory()), &error_fatal);
@@ -157,17 +157,17 @@ static void versal_create_apu_gic(SigiVersal *s, qemu_irq *pic)
 
     for (i = 0; i < nr_apu_cpus; i++) {
         DeviceState *cpudev = DEVICE(&s->cpu_subsys.apu.cpu[i]);
-        int ppibase = SIGI_VERSAL_NR_IRQS + i * GIC_INTERNAL + GIC_NR_SGIS;
+        int ppibase = SIGI_SOC_NR_IRQS + i * GIC_INTERNAL + GIC_NR_SGIS;
         qemu_irq maint_irq;
         int ti;
         /* Mapping from the output timer irq lines from the CPU to the
          * GIC PPI inputs.
          */
         const int timer_irq[] = {
-            [GTIMER_PHYS] = VERSAL_TIMER_NS_EL1_IRQ,
-            [GTIMER_VIRT] = VERSAL_TIMER_VIRT_IRQ,
-            [GTIMER_HYP]  = VERSAL_TIMER_NS_EL2_IRQ,
-            [GTIMER_SEC]  = VERSAL_TIMER_S_EL1_IRQ,
+            [GTIMER_PHYS] = SIGI_SOC_TIMER_NS_EL1_IRQ,
+            [GTIMER_VIRT] = SIGI_SOC_TIMER_VIRT_IRQ,
+            [GTIMER_HYP]  = SIGI_SOC_TIMER_NS_EL2_IRQ,
+            [GTIMER_SEC]  = SIGI_SOC_TIMER_S_EL1_IRQ,
         };
 
         for (ti = 0; ti < ARRAY_SIZE(timer_irq); ti++) {
@@ -176,7 +176,7 @@ static void versal_create_apu_gic(SigiVersal *s, qemu_irq *pic)
                                                    ppibase + timer_irq[ti]));
         }
         maint_irq = qdev_get_gpio_in(gicdev,
-                                        ppibase + VERSAL_GIC_MAINT_IRQ);
+                                        ppibase + SIGI_SOC_GIC_MAINT_IRQ);
         qdev_connect_gpio_out_named(cpudev, "gicv3-maintenance-interrupt",
                                     0, maint_irq);
         sysbus_connect_irq(gicbusdev, i, qdev_get_gpio_in(cpudev, ARM_CPU_IRQ));
@@ -188,13 +188,13 @@ static void versal_create_apu_gic(SigiVersal *s, qemu_irq *pic)
                            qdev_get_gpio_in(cpudev, ARM_CPU_VFIQ));
     }
 
-    for (i = 0; i < SIGI_VERSAL_NR_IRQS; i++) {
+    for (i = 0; i < SIGI_SOC_NR_IRQS; i++) {
         pic[i] = qdev_get_gpio_in(gicdev, i);
     }
-    versal_create_its(s);
+    virt_create_its(s);
 }
 
-static void versal_create_rpu_cpus(SigiVersal *s)
+static void virt_create_rpu_cpus(SigiSoC *s)
 {
     int i;
 
@@ -207,7 +207,7 @@ static void versal_create_rpu_cpus(SigiVersal *s)
 
         object_initialize_child(OBJECT(&s->mcu_subsys.rpu.cluster),
                                 "rpu-cpu[*]", &s->mcu_subsys.rpu.cpu[i],
-                                SIGI_VERSAL_RCPU_TYPE);
+                                SIGI_SOC_RCPU_TYPE);
         obj = OBJECT(&s->mcu_subsys.rpu.cpu[i]);
         object_property_set_bool(obj, "start-powered-off", true,
                                  &error_abort);
@@ -223,12 +223,12 @@ static void versal_create_rpu_cpus(SigiVersal *s)
     qdev_realize(DEVICE(&s->mcu_subsys.rpu.cluster), NULL, &error_fatal);
 }
 
-static void versal_create_uarts(SigiVersal *s, qemu_irq *pic)
+static void virt_create_uarts(SigiSoC *s, qemu_irq *pic)
 {
     int i;
 
     for (i = 0; i < ARRAY_SIZE(s->cpu_subsys.peri.uarts); i++) {
-        static const int irqs[] = { VERSAL_UART1_IRQ_0, VERSAL_UART0_IRQ_0};
+        static const int irqs[] = { SIGI_SOC_UART1_IRQ_0, SIGI_SOC_UART0_IRQ_0};
         static const uint64_t addrs[] = { MM_UART1, MM_UART0 };
         char *name = g_strdup_printf("uart%d", i);
         DeviceState *dev;
@@ -251,12 +251,12 @@ static void versal_create_uarts(SigiVersal *s, qemu_irq *pic)
     }
 }
 
-static void versal_create_gems(SigiVersal *s, qemu_irq *pic)
+static void virt_create_gems(SigiSoC *s, qemu_irq *pic)
 {
     int i;
 
     for (i = 0; i < ARRAY_SIZE(s->cpu_subsys.peri.gem); i++) {
-        static const int irqs[] = { VERSAL_ETH0_IRQ_0, VERSAL_ETH1_IRQ_0};
+        static const int irqs[] = { SIGI_SOC_ETH0_IRQ_0, SIGI_SOC_ETH1_IRQ_0};
         static const uint64_t addrs[] = { MM_PERI_ETH0, MM_PERI_ETH1 };
         char *name = g_strdup_printf("gem%d", i);
         NICInfo *nd = &nd_table[i];
@@ -285,11 +285,11 @@ static void versal_create_gems(SigiVersal *s, qemu_irq *pic)
 }
 
 /*
-static void versal_create_dw_pcie(SigiVersal *s, qemu_irq *pic)
+static void virt_create_dw_pcie(SigiSoC *s, qemu_irq *pic)
 {
 
-    static const int irqs[] = { VERSAL_PCIE_IRQ_A, VERSAL_PCIE_IRQ_B,
-                                VERSAL_PCIE_IRQ_C, VERSAL_PCIE_IRQ_D};
+    static const int irqs[] = { SIGI_SOC_PCIE_IRQ_A, SIGI_SOC_PCIE_IRQ_B,
+                                SIGI_SOC_PCIE_IRQ_C, SIGI_SOC_PCIE_IRQ_D};
     DeviceState *dev;
     MemoryRegion *mr;
     int i;
@@ -308,11 +308,11 @@ static void versal_create_dw_pcie(SigiVersal *s, qemu_irq *pic)
 }
 */
 
-static void versal_create_pcie(SigiVersal *s, qemu_irq *pic)
+static void virt_create_pcie(SigiSoC *s, qemu_irq *pic)
 {
 
-    static const int irqs[] = { VERSAL_PCIE_IRQ_A, VERSAL_PCIE_IRQ_B,
-                                VERSAL_PCIE_IRQ_C, VERSAL_PCIE_IRQ_D};
+    static const int irqs[] = { SIGI_SOC_PCIE_IRQ_A, SIGI_SOC_PCIE_IRQ_B,
+                                SIGI_SOC_PCIE_IRQ_C, SIGI_SOC_PCIE_IRQ_D};
     DeviceState *dev;
     MemoryRegion *mmio_alias;
     MemoryRegion *mmio_reg;
@@ -357,7 +357,7 @@ static void versal_create_pcie(SigiVersal *s, qemu_irq *pic)
     }
 }
 
-static void versal_create_sdhci(SigiVersal *s, qemu_irq *pic)
+static void virt_create_sdhci(SigiSoC *s, qemu_irq *pic)
 {
     int i;
 
@@ -379,15 +379,20 @@ static void versal_create_sdhci(SigiVersal *s, qemu_irq *pic)
                                     MM_PERI_SDHCI0 + i * MM_PERI_SDHCI0_SIZE, mr);
 
         sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
-                           pic[VERSAL_SDHCI0_IRQ_0 + i * 2]);
+                           pic[SIGI_SOC_SDHCI0_IRQ_0 + i * 2]);
     }
+}
+
+static void virt_create_usb(SigiSoC *s, qemu_irq *pic)
+{
+
 }
 
 
 /* This takes the board allocated linear DDR memory and creates aliases
  * for each split DDR range/aperture on the Versal address map.
  */
-static void versal_map_ddr(SigiVersal *s)
+static void virt_map_ddr(SigiSoC *s)
 {
     uint64_t size = memory_region_size(s->cfg.mr_ddr);
     /* Describes the various split DDR access regions.  */
@@ -421,52 +426,53 @@ static void versal_map_ddr(SigiVersal *s)
     }
 }
 
-static void versal_unimp(SigiVersal *s)
+static void virt_unimp(SigiSoC *s)
 {
     //create_unimplemented_device("pcie-phy", MM_PERI_PCIE_PHY, MM_PERI_PCIE_PHY_SIZE);
 }
 
-static void sigi_versal_realize(DeviceState *dev, Error **errp)
+static void sigi_soc_realize(DeviceState *dev, Error **errp)
 {
-    SigiVersal *s = SIGI_VERSAL(dev);
-    qemu_irq pic[SIGI_VERSAL_NR_IRQS];
+    SigiSoC *s = SIGI_SOC(dev);
+    qemu_irq pic[SIGI_SOC_NR_IRQS];
 
-    versal_create_apu_cpus(s);
-    versal_create_apu_gic(s, pic);
-    versal_create_rpu_cpus(s);
-    versal_create_uarts(s, pic);
-    versal_create_sdhci(s, pic);
-    versal_create_gems(s, pic);
-    //versal_create_dw_pcie(s, pic);
-    versal_create_pcie(s, pic);
-    versal_map_ddr(s);
-    versal_unimp(s);
+    virt_create_apu_cpus(s);
+    virt_create_apu_gic(s, pic);
+    virt_create_rpu_cpus(s);
+    virt_create_uarts(s, pic);
+    virt_create_sdhci(s, pic);
+    virt_create_gems(s, pic);
+    //virt_create_dw_pcie(s, pic);
+    virt_create_pcie(s, pic);
+    virt_create_usb(s, pic);
+    virt_map_ddr(s);
+    virt_unimp(s);
 
     //memory_region_add_subregion_overlap(&s->cpu_subsys.apu.mr, 0, &s->mr_ps, 0);
 }
 
-static void sigi_versal_init(Object *obj)
+static void sigi_soc_init(Object *obj)
 {
-    //SigiVersal *s = SIGI_VERSAL(obj);
+    //SigiSoC *s = SIGI_SOC(obj);
 
     //memory_region_init(&s->cpu_subsys.apu.mr, obj, "mr-apu", UINT64_MAX);
     //memory_region_init(&s->mcu_subsys.rpu.mr, obj, "mr-rpu", UINT64_MAX);
     //memory_region_init(&s->mr_ps, obj, "mr-ps-switch", UINT64_MAX);
 }
 
-static Property sigi_versal_properties[] = {
-    DEFINE_PROP_LINK("ddr", SigiVersal, cfg.mr_ddr, TYPE_MEMORY_REGION,
+static Property sigi_soc_properties[] = {
+    DEFINE_PROP_LINK("ddr", SigiSoC, cfg.mr_ddr, TYPE_MEMORY_REGION,
                      MemoryRegion *),
-    DEFINE_PROP_BOOL("has-emmc", SigiVersal, cfg.has_emmc, false),
+    DEFINE_PROP_BOOL("has-emmc", SigiSoC, cfg.has_emmc, false),
     DEFINE_PROP_END_OF_LIST()
 };
 
-static void sigi_versal_class_init(ObjectClass *klass, void *data)
+static void sigi_soc_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
-    dc->realize = sigi_versal_realize;
-    device_class_set_props(dc, sigi_versal_properties);
+    dc->realize = sigi_soc_realize;
+    device_class_set_props(dc, sigi_soc_properties);
     object_class_property_add_bool(klass, "secure", virt_get_secure,
                                    virt_set_secure);
     object_class_property_set_description(klass, "secure",
@@ -482,17 +488,17 @@ static void sigi_versal_class_init(ObjectClass *klass, void *data)
     /* No VMSD since we haven't got any top-level SoC state to save.  */
 }
 
-static const TypeInfo sigi_versal_info = {
-    .name = TYPE_SIGI_VERSAL,
+static const TypeInfo sigi_soc_info = {
+    .name = TYPE_SIGI_SOC,
     .parent = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(SigiVersal),
-    .instance_init = sigi_versal_init,
-    .class_init = sigi_versal_class_init,
+    .instance_size = sizeof(SigiSoC),
+    .instance_init = sigi_soc_init,
+    .class_init = sigi_soc_class_init,
 };
 
-static void sigi_versal_register_types(void)
+static void sigi_soc_register_types(void)
 {
-    type_register_static(&sigi_versal_info);
+    type_register_static(&sigi_soc_info);
 }
 
-type_init(sigi_versal_register_types);
+type_init(sigi_soc_register_types);

@@ -17,7 +17,7 @@
 #include "hw/arm/fdt.h"
 #include "cpu.h"
 #include "hw/qdev-properties.h"
-#include "hw/arm/sigi-versal.h"
+#include "hw/arm/sigi-soc.h"
 #include "qom/object.h"
 #include "sysemu/sysemu.h"
 #include <stdbool.h>
@@ -30,7 +30,7 @@ struct HobotSigiVirt {
     MachineState parent_obj;
     Notifier machine_done;
 
-    SigiVersal soc;
+    SigiSoC soc;
 
     void *fdt;
     int fdt_size;
@@ -110,7 +110,7 @@ static void fdt_add_cpu_nodes(HobotSigiVirt *s, uint32_t psci_conduit)
     qemu_fdt_setprop_cell(s->fdt, "/cpus", "#size-cells", 0x0);
     qemu_fdt_setprop_cell(s->fdt, "/cpus", "#address-cells", 1);
 
-    for (i = SIGI_VERSAL_NR_ACPUS - 1; i >= 0; i--) {
+    for (i = SIGI_SOC_NR_ACPUS - 1; i >= 0; i--) {
         ARMCPU *armcpu = ARM_CPU(qemu_get_cpu(i));
         char *name = g_strdup_printf("/cpus/cpu@%lx", armcpu->mp_affinity);
 
@@ -134,7 +134,7 @@ static void fdt_add_gic_nodes(HobotSigiVirt *s)
     qemu_fdt_add_subnode(s->fdt, nodename);
     qemu_fdt_setprop_cell(s->fdt, nodename, "phandle", s->phandle.gic);
     qemu_fdt_setprop_cells(s->fdt, nodename, "interrupts",
-                           GIC_FDT_IRQ_TYPE_PPI, VERSAL_GIC_MAINT_IRQ,
+                           GIC_FDT_IRQ_TYPE_PPI, SIGI_SOC_GIC_MAINT_IRQ,
                            GIC_FDT_IRQ_FLAGS_LEVEL_HI);
     qemu_fdt_setprop(s->fdt, nodename, "interrupt-controller", NULL, 0);
     qemu_fdt_setprop_sized_cells(s->fdt, nodename, "reg",
@@ -154,10 +154,10 @@ static void fdt_add_timer_nodes(HobotSigiVirt *s)
 
     qemu_fdt_add_subnode(s->fdt, "/timer");
     qemu_fdt_setprop_cells(s->fdt, "/timer", "interrupts",
-            GIC_FDT_IRQ_TYPE_PPI, VERSAL_TIMER_S_EL1_IRQ, irqflags,
-            GIC_FDT_IRQ_TYPE_PPI, VERSAL_TIMER_NS_EL1_IRQ, irqflags,
-            GIC_FDT_IRQ_TYPE_PPI, VERSAL_TIMER_VIRT_IRQ, irqflags,
-            GIC_FDT_IRQ_TYPE_PPI, VERSAL_TIMER_NS_EL2_IRQ, irqflags);
+            GIC_FDT_IRQ_TYPE_PPI, SIGI_SOC_TIMER_S_EL1_IRQ, irqflags,
+            GIC_FDT_IRQ_TYPE_PPI, SIGI_SOC_TIMER_NS_EL1_IRQ, irqflags,
+            GIC_FDT_IRQ_TYPE_PPI, SIGI_SOC_TIMER_VIRT_IRQ, irqflags,
+            GIC_FDT_IRQ_TYPE_PPI, SIGI_SOC_TIMER_NS_EL2_IRQ, irqflags);
     qemu_fdt_setprop(s->fdt, "/timer", "compatible",
                      compat, sizeof(compat));
 }
@@ -166,7 +166,7 @@ static void fdt_add_uart_nodes(HobotSigiVirt *s)
 {
     uint64_t addrs[] = { MM_UART1, MM_UART0 };
     uint64_t size[] = {MM_UART1_SIZE, MM_UART0_SIZE};
-    unsigned int irqs[] = { VERSAL_UART1_IRQ_0, VERSAL_UART0_IRQ_0 };
+    unsigned int irqs[] = { SIGI_SOC_UART1_IRQ_0, SIGI_SOC_UART0_IRQ_0 };
     const char compat[] = "ns16550";
     int i;
 
@@ -213,7 +213,7 @@ static void fdt_add_sdhci_nodes(HobotSigiVirt *s)
         qemu_fdt_setprop_cell(s->fdt, name, "clocks",
                                s->phandle.clk_200Mhz);
         qemu_fdt_setprop_cells(s->fdt, name, "interrupts",
-                               GIC_FDT_IRQ_TYPE_SPI, VERSAL_SDHCI0_IRQ_0 + i * 2,
+                               GIC_FDT_IRQ_TYPE_SPI, SIGI_SOC_SDHCI0_IRQ_0 + i * 2,
                                GIC_FDT_IRQ_FLAGS_LEVEL_HI);
 
         qemu_fdt_setprop_sized_cells(s->fdt, name, "reg",
@@ -400,7 +400,7 @@ static void sigi_virt_init(MachineState *machine)
     }
 
     object_initialize_child(OBJECT(machine), "sigi-versal", &s->soc,
-                            TYPE_SIGI_VERSAL);
+                            TYPE_SIGI_SOC);
     object_property_set_link(OBJECT(&s->soc), "ddr", OBJECT(machine->ram),
                              &error_abort);
     object_property_set_bool(OBJECT(&s->soc), "has-emmc", s->cfg.has_emmc,
@@ -461,9 +461,9 @@ static void sigi_virt_machine_class_init(ObjectClass *oc, void *data)
 
     mc->desc = "Hobot Sigi Virtual Development Board";
     mc->init = sigi_virt_init;
-    mc->min_cpus = SIGI_VERSAL_NR_ACPUS + SIGI_VERSAL_NR_RCPUS;
-    mc->max_cpus = SIGI_VERSAL_NR_ACPUS + SIGI_VERSAL_NR_RCPUS;
-    mc->default_cpus = SIGI_VERSAL_NR_ACPUS + SIGI_VERSAL_NR_RCPUS;
+    mc->min_cpus = SIGI_SOC_NR_ACPUS + SIGI_SOC_NR_RCPUS;
+    mc->max_cpus = SIGI_SOC_NR_ACPUS + SIGI_SOC_NR_RCPUS;
+    mc->default_cpus = SIGI_SOC_NR_ACPUS + SIGI_SOC_NR_RCPUS;
     mc->no_cdrom = true;
     mc->default_ram_id = "ddr";
     mc->no_sdcard = 1;      // disable default_sdcard
