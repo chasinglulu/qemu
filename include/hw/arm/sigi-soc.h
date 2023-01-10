@@ -29,9 +29,9 @@ OBJECT_DECLARE_SIMPLE_TYPE(SigiSoC, SIGI_SOC)
 
 #define SIGI_SOC_NR_ACPUS    4
 #define SIGI_SOC_NR_RCPUS    4
-#define SIGI_SOC_NR_UARTS    2
+#define SIGI_SOC_NR_UARTS    4
 #define SIGI_SOC_NR_SDHCI    2
-#define SIGI_SOC_NR_GEMS     2
+#define SIGI_SOC_NR_GEMS     4
 #define SIGI_SOC_NR_IRQS     192
 
 struct SigiSoC {
@@ -89,33 +89,27 @@ struct SigiSoC {
 
 #define SIGI_SOC_ETH0_IRQ_0           40
 #define SIGI_SOC_UART0_IRQ_0          73
-#define SIGI_SOC_UART1_IRQ_0          74
 #define SIGI_SOC_SDHCI0_IRQ_0         120
-#define SIGI_SOC_ETH1_IRQ_0           124
 #define SIGI_SOC_PCIE_IRQ_A           127
 #define SIGI_SOC_PCIE_IRQ_B           128
 #define SIGI_SOC_PCIE_IRQ_C           129
 #define SIGI_SOC_PCIE_IRQ_D           130
 
-#define MM_GIC_ITS                  0x50000000U
-#define MM_GIC_ITS_SIZE             0x20000
-#define MM_GIC_APU_DIST_MAIN        0x58000000U
+#define MM_GIC_ITS                  0x30290000U
+#define MM_GIC_ITS_SIZE             0x10000
+#define MM_GIC_APU_DIST_MAIN        0x30B00000U
 #define MM_GIC_APU_DIST_MAIN_SIZE   0x10000
-#define MM_GIC_APU_REDIST_0         0x58040000U
-#define MM_GIC_APU_REDIST_0_SIZE    0x80000
+#define MM_GIC_APU_REDIST_0         0x30B60000U
+#define MM_GIC_APU_REDIST_0_SIZE    0x10000
 
-#define MM_UART0                    0x43b80000U
-#define MM_UART0_SIZE               0x10000
-#define MM_UART1                    0x43b90000U
-#define MM_UART1_SIZE               0x10000
+#define MM_PERI_UART0               0x39050000U
+#define MM_PERI_UART0_SIZE          0x10000
 
-#define MM_PERI_SDHCI0              0x48030000U
+#define MM_PERI_SDHCI0              0x39030000UL
 #define MM_PERI_SDHCI0_SIZE         0x10000
 
-#define MM_PERI_ETH0                0x59110000U
+#define MM_PERI_ETH0                0x33380000U
 #define MM_PERI_ETH0_SIZE           0x10000
-#define MM_PERI_ETH1                0x59120000U
-#define MM_PERI_ETH1_SIZE           0x10000
 
 #define MM_PERI_DW_PCIE             0x48070000U
 #define MM_PERI_DW_PCIE_SIZE        0x1000
@@ -125,14 +119,14 @@ struct SigiSoC {
 #define MM_PERI_DW_PCIE_CFG_SIZE    0x400000
 
 /* ECAM-based PCIe host controller*/
-#define MM_PERI_PCIE_CFG            0x59C00000U
+#define MM_PERI_PCIE_CFG            0x34000000U
 #define MM_PERI_PCIE_CFG_SIZE       0x400000
-#define MM_PERI_PCIE_MMIO           0x60000000U
-#define MM_PERI_PCIE_MMIO_SIZE      0x10000000U
-#define MM_PERI_PCIE_MMIO_HIGH      0x480000000ULL
-#define MM_PERI_PCIE_MMIO_HIGH_SIZE 0x100000000ULL
+#define MM_PERI_PCIE_MMIO           0x80000000U
+#define MM_PERI_PCIE_MMIO_SIZE      0x40000000U
+#define MM_PERI_PCIE_MMIO_HIGH      0x8000000000ULL
+#define MM_PERI_PCIE_MMIO_HIGH_SIZE 0x8000000000ULL
 
-#define MM_TOP_DDR		    0x80000000U
-#define MM_TOP_DDR_SIZE		0x400000000ULL
+#define MM_TOP_DDR		    0x3000000000ULL
+#define MM_TOP_DDR_SIZE		0x1800000000ULL
 
 #endif

@@ -26,7 +26,6 @@
 #include "hw/misc/unimp.h"
 #include "hw/nvme/nvme.h"
 
-
 #define SIGI_SOC_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a78ae")
 #define SIGI_SOC_RCPU_TYPE ARM_CPU_TYPE_NAME("cortex-r52")
 
@@ -228,11 +227,10 @@ static void virt_create_uarts(SigiSoC *s, qemu_irq *pic)
     int i;
 
     for (i = 0; i < ARRAY_SIZE(s->cpu_subsys.peri.uarts); i++) {
-        static const int irqs[] = { SIGI_SOC_UART1_IRQ_0, SIGI_SOC_UART0_IRQ_0};
-        static const uint64_t addrs[] = { MM_UART1, MM_UART0 };
         char *name = g_strdup_printf("uart%d", i);
         DeviceState *dev;
         MemoryRegion *mr;
+        uint64_t addr;
 
         object_initialize_child(OBJECT(s), name, &s->cpu_subsys.peri.uarts[i],
                                 TYPE_SERIAL_MM);
@@ -244,9 +242,10 @@ static void virt_create_uarts(SigiSoC *s, qemu_irq *pic)
         sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
         mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
-        memory_region_add_subregion(get_system_memory(), addrs[i], mr);
+        addr = MM_PERI_UART0 + i * MM_PERI_UART0_SIZE;
+        memory_region_add_subregion(get_system_memory(), addr, mr);
 
-        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, pic[irqs[i]]);
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, pic[SIGI_SOC_UART0_IRQ_0 + i]);
         g_free(name);
     }
 }
@@ -256,12 +255,14 @@ static void virt_create_gems(SigiSoC *s, qemu_irq *pic)
     int i;
 
     for (i = 0; i < ARRAY_SIZE(s->cpu_subsys.peri.gem); i++) {
-        static const int irqs[] = { SIGI_SOC_ETH0_IRQ_0, SIGI_SOC_ETH1_IRQ_0};
-        static const uint64_t addrs[] = { MM_PERI_ETH0, MM_PERI_ETH1 };
-        char *name = g_strdup_printf("gem%d", i);
+        char *name;
         NICInfo *nd = &nd_table[i];
         DeviceState *dev;
         MemoryRegion *mr;
+        uint64_t addr;
+
+        addr = MM_PERI_ETH0 + i * MM_PERI_ETH0_SIZE;
+        name = g_strdup_printf("gem%d", i);
 
         object_initialize_child(OBJECT(s), name, &s->cpu_subsys.peri.gem[i],
                                 TYPE_CADENCE_GEM);
@@ -277,9 +278,9 @@ static void virt_create_gems(SigiSoC *s, qemu_irq *pic)
         sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
         mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
-        memory_region_add_subregion(get_system_memory(), addrs[i], mr);
+        memory_region_add_subregion(get_system_memory(), addr, mr);
 
-        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, pic[irqs[i]]);
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, pic[SIGI_SOC_ETH0_IRQ_0 + i]);
         g_free(name);
     }
 }
