@@ -393,7 +393,7 @@ config XLNX_VERSAL
     select XLNX_BBRAM
     select XLNX_EFUSE_VERSAL
 
-config HOBOT_VERSAL
+config HOBOT_VIRT
     bool
     imply PCI_DEVICES
     select ARM_GIC
