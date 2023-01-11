@@ -50,6 +50,7 @@ struct SigiSoC {
             GPEXHost pcie;
             CadenceGEMState gem[SIGI_SOC_NR_GEMS];
             USBDWC3 usb;
+            MemoryRegion l2sram;
         } peri;
         struct {
             CPUClusterState cluster;
@@ -128,5 +129,7 @@ struct SigiSoC {
 
 #define MM_TOP_DDR		    0x3000000000ULL
 #define MM_TOP_DDR_SIZE		0x1800000000ULL
+#define MM_L2SRAM              0x04000000UL
+#define MM_L2SRAM_SIZE         0x2000000
 
 #endif

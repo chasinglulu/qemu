@@ -8,7 +8,6 @@
  * (at your option) any later version.
  */
 
-
 #include "qemu/osdep.h"
 #include "qemu/units.h"
 #include "qapi/error.h"
@@ -448,6 +447,11 @@ static void sigi_soc_realize(DeviceState *dev, Error **errp)
     virt_create_usb(s, pic);
     virt_map_ddr(s);
     virt_unimp(s);
+
+    /* Create the On Chip Memory (L2SRAM).  */
+    memory_region_init_ram(&s->cpu_subsys.peri.l2sram, OBJECT(s), "l2sram",
+                           MM_L2SRAM_SIZE, &error_fatal);
+    memory_region_add_subregion_overlap(get_system_memory(), MM_L2SRAM, &s->cpu_subsys.peri.l2sram, 0);
 
     //memory_region_add_subregion_overlap(&s->cpu_subsys.apu.mr, 0, &s->mr_ps, 0);
 }
