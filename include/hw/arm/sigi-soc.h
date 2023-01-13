@@ -23,6 +23,7 @@
 #include "hw/pci-host/gpex.h"
 #include "hw/net/cadence_gem.h"
 #include "hw/usb/hcd-dwc3.h"
+#include "hw/gpio/dwapb_gpio.h"
 
 #define TYPE_SIGI_SOC "sigi-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiSoC, SIGI_SOC)
@@ -32,6 +33,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(SigiSoC, SIGI_SOC)
 #define SIGI_SOC_NR_UARTS    4
 #define SIGI_SOC_NR_SDHCI    2
 #define SIGI_SOC_NR_GEMS     4
+#define SIGI_SOC_NR_GPIO     2
 #define SIGI_SOC_NR_IRQS     192
 
 struct SigiSoC {
@@ -51,6 +53,7 @@ struct SigiSoC {
             CadenceGEMState gem[SIGI_SOC_NR_GEMS];
             USBDWC3 usb;
             MemoryRegion l2sram;
+            DWAPBGPIOState gpio[SIGI_SOC_NR_GPIO];
         } peri;
         struct {
             CPUClusterState cluster;
@@ -90,6 +93,7 @@ struct SigiSoC {
 
 #define SIGI_SOC_ETH0_IRQ_0           40
 #define SIGI_SOC_UART0_IRQ_0          73
+#define SIGI_SOC_GPIO_IRQ_0           78
 #define SIGI_SOC_SDHCI0_IRQ_0         120
 #define SIGI_SOC_PCIE_IRQ_A           127
 #define SIGI_SOC_PCIE_IRQ_B           128
@@ -105,6 +109,9 @@ struct SigiSoC {
 
 #define MM_PERI_UART0               0x39050000U
 #define MM_PERI_UART0_SIZE          0x10000
+
+#define MM_PERI_GPIO0               0x3A120000UL
+#define MM_PERI_GPIO_SIZE           0x10000
 
 #define MM_PERI_SDHCI0              0x39030000UL
 #define MM_PERI_SDHCI0_SIZE         0x10000

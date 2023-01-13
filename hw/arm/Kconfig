@@ -403,6 +403,7 @@ config HOBOT_VIRT
     select SERIAL
     select UNIMP
     select CADENCE_SDHCI
+    select DWAPB_GPIO
 
 config NPCM7XX
     bool

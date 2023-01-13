@@ -24,6 +24,7 @@
 #include "qemu/log.h"
 #include "hw/misc/unimp.h"
 #include "hw/nvme/nvme.h"
+#include "hw/gpio/dwapb_gpio.h"
 
 #define SIGI_SOC_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a78ae")
 #define SIGI_SOC_RCPU_TYPE ARM_CPU_TYPE_NAME("cortex-r52")
@@ -112,7 +113,6 @@ static void virt_create_its(SigiSoC *s)
     object_initialize_child(OBJECT(s), "apu-gic-its", &s->cpu_subsys.apu.its,
                             itsclass);
     dev = DEVICE(&s->cpu_subsys.apu.its);
-    //object_property_set_link(OBJECT(dev), "parent-gicv3", OBJECT(&s->cpu_subsys.apu.gic), &error_abort);
     object_property_set_link(OBJECT(dev), "parent-gicv3", OBJECT(&s->cpu_subsys.apu.gic), &error_abort);
     sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
@@ -388,6 +388,29 @@ static void virt_create_usb(SigiSoC *s, qemu_irq *pic)
 
 }
 
+static void virt_create_gpio(SigiSoC *s, qemu_irq *pic)
+{
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(s->cpu_subsys.peri.gpio); i++) {
+        DeviceState *dev;
+        MemoryRegion *mr;
+
+        object_initialize_child(OBJECT(s), "gpio[*]", &s->cpu_subsys.peri.gpio[i],
+                                TYPE_DWAPB_GPIO);
+        dev = DEVICE(&s->cpu_subsys.peri.gpio[i]);
+        dev->id = g_strdup_printf("gpio%d", i);
+
+        sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+        mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+        memory_region_add_subregion(get_system_memory(),
+                                    MM_PERI_GPIO0 + i * MM_PERI_GPIO_SIZE, mr);
+
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+                           pic[SIGI_SOC_GPIO_IRQ_0 + i]);
+    }
+}
+
 
 /* This takes the board allocated linear DDR memory and creates aliases
  * for each split DDR range/aperture on the Versal address map.
@@ -445,6 +468,7 @@ static void sigi_soc_realize(DeviceState *dev, Error **errp)
     //virt_create_dw_pcie(s, pic);
     virt_create_pcie(s, pic);
     virt_create_usb(s, pic);
+    virt_create_gpio(s, pic);
     virt_map_ddr(s);
     virt_unimp(s);
 
