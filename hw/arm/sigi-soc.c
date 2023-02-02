@@ -385,7 +385,22 @@ static void virt_create_sdhci(SigiSoC *s, qemu_irq *pic)
 
 static void virt_create_usb(SigiSoC *s, qemu_irq *pic)
 {
+    DeviceState *dev;
+    MemoryRegion *mr;
+    USBDWC3 *usb;
 
+    object_initialize_child(OBJECT(s), "usb", &s->cpu_subsys.peri.usb,
+                            TYPE_USB_DWC3);
+    usb = &s->cpu_subsys.peri.usb;
+    dev = DEVICE(&s->cpu_subsys.peri.usb);
+
+    qdev_prop_set_uint32(dev, "intrs", 1);
+    qdev_prop_set_uint32(dev, "slots", 2);
+
+    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+    memory_region_add_subregion(get_system_memory(), MM_PERI_USB, mr);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&usb->sysbus_xhci), 0, pic[SIGI_SOC_USB_IRQ_0]);
 }
 
 static void virt_create_gpio(SigiSoC *s, qemu_irq *pic)

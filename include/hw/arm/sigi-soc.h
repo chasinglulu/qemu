@@ -99,6 +99,7 @@ struct SigiSoC {
 #define SIGI_SOC_PCIE_IRQ_B           128
 #define SIGI_SOC_PCIE_IRQ_C           129
 #define SIGI_SOC_PCIE_IRQ_D           130
+#define SIGI_SOC_USB_IRQ_0            132
 
 #define MM_GIC_ITS                  0x30290000U
 #define MM_GIC_ITS_SIZE             0x10000
@@ -118,6 +119,9 @@ struct SigiSoC {
 
 #define MM_PERI_ETH0                0x33380000U
 #define MM_PERI_ETH0_SIZE           0x10000
+
+#define MM_PERI_USB                 0x3A820000U
+#define MM_PERI_USB_SZIE            0x10000
 
 #define MM_PERI_DW_PCIE             0x48070000U
 #define MM_PERI_DW_PCIE_SIZE        0x1000
