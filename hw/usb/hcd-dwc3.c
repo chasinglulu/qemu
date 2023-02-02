@@ -343,6 +343,31 @@ REG32(GFLADJ, 0x530)
     FIELD(GFLADJ, GFLADJ_REFCLK_FLADJ, 8, 14)
     FIELD(GFLADJ, GFLADJ_30MHZ_SDBND_SEL, 7, 1)
     FIELD(GFLADJ, GFLADJ_30MHZ, 0, 6)
+REG32(DCFG, 0x600)
+    FIELD(DCFG, IGNSTRMPP, 23, 1)
+    FIELD(DCFG, LPMCAP, 22, 1)
+    FIELD(DCFG, NUMP, 17, 5)
+    FIELD(DCFG, INTRNUM, 12, 5)
+    FIELD(DCFG, RESERVED_11_10, 10, 2)
+    FIELD(DCFG, DEVADDR, 3, 7)
+    FIELD(DCFG, DEVSPD, 0, 3)
+REG32(DCTL, 0x604)
+    FIELD(DCTL, RUN_STOP, 31, 1)
+    FIELD(DCTL, CSFTRST, 30, 1)
+    FIELD(DCTL, RESERVED_29, 29, 1)
+    FIELD(DCTL, HIRDTHRES, 24, 5)
+    FIELD(DCTL, LPM_NYET_THRES, 20, 4)
+    FIELD(DCTL, KEEPCONNECT, 19, 1)
+    FIELD(DCTL, L1HIBERNATIONEN, 18, 1)
+    FIELD(DCTL, CRS, 17, 1)
+    FIELD(DCTL, CSS, 16, 1)
+    FIELD(DCTL, RESERVED_15_13, 13, 3)
+    FIELD(DCTL, INITU2ENA, 12, 1)
+    FIELD(DCTL, ACCEPTU2ENA, 11, 1)
+    FIELD(DCTL, INITU1ENA, 10, 1)
+    FIELD(DCTL, ACCEPTU1ENA, 9, 1)
+    FIELD(DCTL, ULSTCHNGREQ, 5, 4)
+    FIELD(DCTL, TSTCTL, 1, 4)
 
 #define DWC3_GLOBAL_OFFSET 0xC100
 static void reset_csr(USBDWC3 * s)
@@ -394,6 +419,17 @@ static void usb_dwc3_guid_postw(RegisterInfo *reg, uint64_t val64)
     USBDWC3 *s = USB_DWC3(reg->opaque);
 
     s->regs[R_GUID] = s->cfg.dwc_usb3_user;
+}
+
+static void usb_dwc3_dctl_postw(RegisterInfo *reg, uint64_t val64)
+{
+    USBDWC3 *s = USB_DWC3(reg->opaque);
+
+    if (ARRAY_FIELD_EX32(s->regs, DCTL, CSFTRST)) {
+        reset_csr(s);
+    }
+
+    clear_bit(30, (uint64_t*)&s->regs[R_DCTL]);
 }
 
 static const RegisterAccessInfo usb_dwc3_regs_info[] = {
@@ -560,6 +596,13 @@ static const RegisterAccessInfo usb_dwc3_regs_info[] = {
         .rsvd = 0x40,
         .ro = 0x400040,
         .unimp = 0xffffffff,
+    }, { .name = "DCFG", .addr = A_DCFG,
+        .reset = 0x80005,
+        .rsvd = 0xff000c00,
+    }, { .name = "DCTL", .addr = A_DCTL,
+        .reset = 0x0,
+        .rsvd = 0xe001,
+        .post_write = usb_dwc3_dctl_postw,
     }
 };
 
