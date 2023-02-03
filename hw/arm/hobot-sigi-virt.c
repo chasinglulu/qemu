@@ -404,7 +404,9 @@ static void sigi_virt_init(MachineState *machine)
                             TYPE_SIGI_SOC);
     object_property_set_link(OBJECT(&s->soc), "ddr", OBJECT(machine->ram),
                              &error_abort);
-    object_property_set_bool(OBJECT(&s->soc), "has-emmc", s->cfg.has_emmc,
+
+    if(s->cfg.has_emmc)
+        object_property_set_bool(OBJECT(&s->soc), "has-emmc", s->cfg.has_emmc,
                              &error_abort);
 
     if (!machine->kernel_filename) {
