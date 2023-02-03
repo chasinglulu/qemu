@@ -667,7 +667,10 @@ static inline uint64_t sd_addr_to_wpnum(uint64_t addr)
 
 static unsigned sd_boot_capacity_bytes(SDState *sd)
 {
-    return sd->ext_csd[EXT_CSD_BOOT_MULT] << 17;
+    unsigned int enable = sd->ext_csd[EXT_CSD_PART_CONFIG] &
+         EXT_CSD_PART_CONFIG_EN_MASK;
+
+    return enable ? sd->ext_csd[EXT_CSD_BOOT_MULT] << 17 : 0;
 }
 
 static void sd_reset(DeviceState *dev)
