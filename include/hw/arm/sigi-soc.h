@@ -106,7 +106,7 @@ struct SigiSoC {
 #define MM_GIC_APU_DIST_MAIN        0x30B00000U
 #define MM_GIC_APU_DIST_MAIN_SIZE   0x10000
 #define MM_GIC_APU_REDIST_0         0x30B60000U
-#define MM_GIC_APU_REDIST_0_SIZE    0x10000
+#define MM_GIC_APU_REDIST_0_SIZE    0x100000
 
 #define MM_PERI_UART0               0x39050000U
 #define MM_PERI_UART0_SIZE          0x10000

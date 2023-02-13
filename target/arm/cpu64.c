@@ -399,10 +399,10 @@ static void aarch64_a78ae_initfn(Object *obj)
     cpu->reset_sctlr = 0x30c50838;
 
     /* From B4.23 ICH_VTR_EL2 */
-    cpu->gic_num_lrs = 3;
-    cpu->gic_vpribits = 4;
-    cpu->gic_vprebits = 4;
-    cpu->gic_pribits = 4;
+    cpu->gic_num_lrs = 4;
+    cpu->gic_vpribits = 5;
+    cpu->gic_vprebits = 5;
+    cpu->gic_pribits = 5;
 
     /* From B5.1 AdvSIMD AArch64 register summary */
     cpu->isar.mvfr0 = 0x10110222;
