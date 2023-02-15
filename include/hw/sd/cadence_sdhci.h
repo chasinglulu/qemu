@@ -37,6 +37,7 @@ typedef struct CadenceSDHCIState {
 
     uint32_t regs[CADENCE_SDHCI_NUM_REGS];
     uint8_t index;
+    uint64_t capareg;
 
     SDHCIState sdhci;
 } CadenceSDHCIState;
