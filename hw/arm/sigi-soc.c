@@ -371,6 +371,8 @@ static void virt_create_sdhci(SigiSoC *s, qemu_irq *pic)
         dev->id = g_strdup_printf("sdhci%d", i);
         object_property_set_uint(OBJECT(dev), "index", i,
                                  &error_fatal);
+        object_property_set_uint(OBJECT(dev), "capareg", SDHCI_CAPABILITIES,
+                                 &error_fatal);
 
         sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
