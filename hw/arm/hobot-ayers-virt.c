@@ -209,7 +209,8 @@ static void fdt_add_sdhci_nodes(HobotAyersVirt *s)
         qemu_fdt_setprop_cells(s->fdt, name, "sdhci-caps-mask",
                                         0xffffffff, 0xffffffff);
         qemu_fdt_setprop_cells(s->fdt, name, "sdhci-caps",
-                                        0x00002807, 0x37ec6481);
+                                        (uint32_t)(SDHCI_CAPABILITIES >> 32),
+                                        (uint32_t)SDHCI_CAPABILITIES);
         qemu_fdt_setprop_cell(s->fdt, name, "clocks",
                                s->phandle.clk_200Mhz);
         qemu_fdt_setprop_cells(s->fdt, name, "interrupts",
