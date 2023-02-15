@@ -1283,6 +1283,10 @@ sdhci_write(void *opaque, hwaddr offset, uint64_t val, unsigned size)
     case SDHC_ADMASYSADDR + 4:
         s->admasysaddr = (s->admasysaddr & (0x00000000FFFFFFFFULL |
                 ((uint64_t)mask << 32))) | ((uint64_t)value << 32);
+        if (s->capareg & R_SDHC_CAPAB_SDMA_MASK &&
+                s->capareg & R_SDHC_CAPAB_BUS64BIT_MASK)
+            s->sdmasysad = (s->sdmasysad & (0x00000000FFFFFFFFULL |
+                    ((uint64_t)mask << 32))) | ((uint64_t)value << 32);
         break;
     case SDHC_FEAER:
         s->acmd12errsts |= value;
@@ -1425,7 +1429,7 @@ const VMStateDescription sdhci_vmstate = {
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT32(sdmasysad, SDHCIState),
+        VMSTATE_UINT64(sdmasysad, SDHCIState),
         VMSTATE_UINT16(blksize, SDHCIState),
         VMSTATE_UINT16(blkcnt, SDHCIState),
         VMSTATE_UINT32(argument, SDHCIState),
