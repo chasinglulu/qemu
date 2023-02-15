@@ -51,7 +51,7 @@ struct SDHCIState {
     qemu_irq irq;
 
     /* Registers cleared on reset */
-    uint32_t sdmasysad;    /* SDMA System Address register */
+    uint64_t sdmasysad;    /* SDMA System Address register */
     uint16_t blksize;      /* Host DMA Buff Boundary and Transfer BlkSize Reg */
     uint16_t blkcnt;       /* Blocks count for current transfer */
     uint32_t argument;     /* Command Argument Register */
