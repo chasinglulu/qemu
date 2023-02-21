@@ -2245,11 +2245,7 @@ static void machvirt_init(MachineState *machine)
 
     create_pcie(vms);
 
-    //if (has_ged && aarch64 && firmware_loaded && virt_is_acpi_enabled(vms)) {
-    //    vms->acpi_dev = create_acpi_ged(vms);
-    //} else {
-        create_gpio_devices(vms, VIRT_GPIO, sysmem);
-    //}
+    create_gpio_devices(vms, VIRT_GPIO, sysmem);
 
     if (vms->secure && !vmc->no_secure_gpio) {
         create_gpio_devices(vms, VIRT_SECURE_GPIO, secure_sysmem);
@@ -2525,12 +2521,6 @@ static void virt_memory_pre_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
     const MachineState *ms = MACHINE(hotplug_dev);
     const bool is_nvdimm = object_dynamic_cast(OBJECT(dev), TYPE_NVDIMM);
 
-    //if (!vms->acpi_dev) {
-    //    error_setg(errp,
-    //               "memory hotplug is not enabled: missing acpi-ged device");
-    //    return;
-    //}
-
     if (vms->mte) {
         error_setg(errp, "memory hotplug is not enabled: MTE is enabled");
         return;
@@ -2693,30 +2683,6 @@ static void virt_machine_device_plug_cb(HotplugHandler *hotplug_dev,
     }
 }
 
-static void virt_dimm_unplug_request(HotplugHandler *hotplug_dev,
-                                     DeviceState *dev, Error **errp)
-{
-    //HobotVirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
-    Error *local_err = NULL;
-
-    // if (!vms->acpi_dev) {
-    //     error_setg(&local_err,
-    //                "memory hotplug is not enabled: missing acpi-ged device");
-    //     goto out;
-    // }
-
-    if (object_dynamic_cast(OBJECT(dev), TYPE_NVDIMM)) {
-        error_setg(&local_err,
-                   "nvdimm device hot unplug is not supported yet.");
-        goto out;
-    }
-
-    //hotplug_handler_unplug_request(HOTPLUG_HANDLER(vms->acpi_dev), dev,
-    //                               &local_err);
-out:
-    error_propagate(errp, local_err);
-}
-
 static void virt_dimm_unplug(HotplugHandler *hotplug_dev,
                              DeviceState *dev, Error **errp)
 {
@@ -2738,9 +2704,7 @@ static void virt_dimm_unplug(HotplugHandler *hotplug_dev,
 static void virt_machine_device_unplug_request_cb(HotplugHandler *hotplug_dev,
                                           DeviceState *dev, Error **errp)
 {
-    if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
-        virt_dimm_unplug_request(hotplug_dev, dev, errp);
-    } else if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MEM_PCI)) {
+   if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MEM_PCI)) {
         virt_virtio_md_pci_unplug_request(hotplug_dev, dev, errp);
     } else {
         error_setg(errp, "device unplug request for unsupported device"
@@ -2937,18 +2901,18 @@ static void virt_instance_init(Object *obj)
     vms->highmem_mmio = true;
     vms->highmem_redists = true;
 
-    if (vmc->no_its) {
-        vms->its = false;
-    } else {
-        /* Default allows ITS instantiation */
-        vms->its = true;
+    //if (vmc->no_its) {
+    vms->its = false;
+    // } else {
+    //     /* Default allows ITS instantiation */
+    //     vms->its = true;
 
-        if (vmc->no_tcg_its) {
-            vms->tcg_its = false;
-        } else {
-            vms->tcg_its = true;
-        }
-    }
+    //     if (vmc->no_tcg_its) {
+    //         vms->tcg_its = false;
+    //     } else {
+    //         vms->tcg_its = true;
+    //     }
+    // }
 
     /* Default disallows iommu instantiation */
     vms->iommu = VIRT_IOMMU_NONE;
@@ -2965,9 +2929,6 @@ static void virt_instance_init(Object *obj)
     vms->irqmap = a15irqmap;
 
     virt_flash_create(vms);
-
-    vms->oem_id = g_strndup(ACPI_BUILD_APPNAME6, 6);
-    vms->oem_table_id = g_strndup(ACPI_BUILD_APPNAME8, 8);
 }
 
 static const TypeInfo virt_machine_info = {
