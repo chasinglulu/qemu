@@ -1713,87 +1713,6 @@ static void virt_set_memmap(HobotVirtMachineState *vms, int pa_bits)
  */
 static void finalize_gic_version(HobotVirtMachineState *vms)
 {
-    unsigned int max_cpus = MACHINE(vms)->smp.max_cpus;
-
-    if (kvm_enabled()) {
-        int probe_bitmap;
-
-        if (!kvm_irqchip_in_kernel()) {
-            switch (vms->gic_version) {
-            case VIRT_GIC_VERSION_HOST:
-                warn_report(
-                    "gic-version=host not relevant with kernel-irqchip=off "
-                     "as only userspace GICv2 is supported. Using v2 ...");
-                return;
-            case VIRT_GIC_VERSION_MAX:
-            case VIRT_GIC_VERSION_NOSEL:
-                vms->gic_version = VIRT_GIC_VERSION_2;
-                return;
-            case VIRT_GIC_VERSION_2:
-                return;
-            case VIRT_GIC_VERSION_3:
-                error_report(
-                    "gic-version=3 is not supported with kernel-irqchip=off");
-                exit(1);
-            case VIRT_GIC_VERSION_4:
-                error_report(
-                    "gic-version=4 is not supported with kernel-irqchip=off");
-                exit(1);
-            }
-        }
-
-        probe_bitmap = kvm_arm_vgic_probe();
-        if (!probe_bitmap) {
-            error_report("Unable to determine GIC version supported by host");
-            exit(1);
-        }
-
-        switch (vms->gic_version) {
-        case VIRT_GIC_VERSION_HOST:
-        case VIRT_GIC_VERSION_MAX:
-            if (probe_bitmap & KVM_ARM_VGIC_V3) {
-                vms->gic_version = VIRT_GIC_VERSION_3;
-            } else {
-                vms->gic_version = VIRT_GIC_VERSION_2;
-            }
-            return;
-        case VIRT_GIC_VERSION_NOSEL:
-            if ((probe_bitmap & KVM_ARM_VGIC_V2) && max_cpus <= GIC_NCPU) {
-                vms->gic_version = VIRT_GIC_VERSION_2;
-            } else if (probe_bitmap & KVM_ARM_VGIC_V3) {
-                /*
-                 * in case the host does not support v2 in-kernel emulation or
-                 * the end-user requested more than 8 VCPUs we now default
-                 * to v3. In any case defaulting to v2 would be broken.
-                 */
-                vms->gic_version = VIRT_GIC_VERSION_3;
-            } else if (max_cpus > GIC_NCPU) {
-                error_report("host only supports in-kernel GICv2 emulation "
-                             "but more than 8 vcpus are requested");
-                exit(1);
-            }
-            break;
-        case VIRT_GIC_VERSION_2:
-        case VIRT_GIC_VERSION_3:
-            break;
-        case VIRT_GIC_VERSION_4:
-            error_report("gic-version=4 is not supported with KVM");
-            exit(1);
-        }
-
-        /* Check chosen version is effectively supported by the host */
-        if (vms->gic_version == VIRT_GIC_VERSION_2 &&
-            !(probe_bitmap & KVM_ARM_VGIC_V2)) {
-            error_report("host does not support in-kernel GICv2 emulation");
-            exit(1);
-        } else if (vms->gic_version == VIRT_GIC_VERSION_3 &&
-                   !(probe_bitmap & KVM_ARM_VGIC_V3)) {
-            error_report("host does not support in-kernel GICv3 emulation");
-            exit(1);
-        }
-        return;
-    }
-
     /* TCG mode */
     switch (vms->gic_version) {
     case VIRT_GIC_VERSION_NOSEL:
@@ -1833,62 +1752,18 @@ static void finalize_gic_version(HobotVirtMachineState *vms)
  */
 static void virt_cpu_post_init(HobotVirtMachineState *vms, MemoryRegion *sysmem)
 {
-    int max_cpus = MACHINE(vms)->smp.max_cpus;
-    bool aarch64, pmu, steal_time;
-    CPUState *cpu;
-
+    bool aarch64;
     aarch64 = object_property_get_bool(OBJECT(first_cpu), "aarch64", NULL);
-    pmu = object_property_get_bool(OBJECT(first_cpu), "pmu", NULL);
-    steal_time = object_property_get_bool(OBJECT(first_cpu),
-                                          "kvm-steal-time", NULL);
 
-    if (kvm_enabled()) {
-        hwaddr pvtime_reg_base = vms->memmap[VIRT_PVTIME].base;
-        hwaddr pvtime_reg_size = vms->memmap[VIRT_PVTIME].size;
+    if (aarch64 && vms->highmem) {
+        int requested_pa_size = 64 - clz64(vms->highest_gpa);
+        int pamax = arm_pamax(ARM_CPU(first_cpu));
 
-        if (steal_time) {
-            MemoryRegion *pvtime = g_new(MemoryRegion, 1);
-            hwaddr pvtime_size = max_cpus * PVTIME_SIZE_PER_CPU;
-
-            /* The memory region size must be a multiple of host page size. */
-            pvtime_size = REAL_HOST_PAGE_ALIGN(pvtime_size);
-
-            if (pvtime_size > pvtime_reg_size) {
-                error_report("pvtime requires a %" HWADDR_PRId
-                             " byte memory region for %d CPUs,"
-                             " but only %" HWADDR_PRId " has been reserved",
-                             pvtime_size, max_cpus, pvtime_reg_size);
-                exit(1);
-            }
-
-            memory_region_init_ram(pvtime, NULL, "pvtime", pvtime_size, NULL);
-            memory_region_add_subregion(sysmem, pvtime_reg_base, pvtime);
-        }
-
-        CPU_FOREACH(cpu) {
-            if (pmu) {
-                assert(arm_feature(&ARM_CPU(cpu)->env, ARM_FEATURE_PMU));
-                if (kvm_irqchip_in_kernel()) {
-                    kvm_arm_pmu_set_irq(cpu, PPI(VIRTUAL_PMU_IRQ));
-                }
-                kvm_arm_pmu_init(cpu);
-            }
-            if (steal_time) {
-                kvm_arm_pvtime_init(cpu, pvtime_reg_base +
-                                         cpu->cpu_index * PVTIME_SIZE_PER_CPU);
-            }
-        }
-    } else {
-        if (aarch64 && vms->highmem) {
-            int requested_pa_size = 64 - clz64(vms->highest_gpa);
-            int pamax = arm_pamax(ARM_CPU(first_cpu));
-
-            if (pamax < requested_pa_size) {
-                error_report("VCPU supports less PA bits (%d) than "
-                             "requested by the memory map (%d)",
-                             pamax, requested_pa_size);
-                exit(1);
-            }
+        if (pamax < requested_pa_size) {
+            error_report("VCPU supports less PA bits (%d) than "
+                         "requested by the memory map (%d)",
+                        pamax, requested_pa_size);
+            exit(1);
         }
     }
 }
@@ -1995,20 +1870,6 @@ static void machvirt_init(MachineState *machine)
         error_report("Number of SMP CPUs requested (%d) exceeds max CPUs "
                      "supported by machine 'mach-virt' (%d)",
                      max_cpus, virt_max_cpus);
-        exit(1);
-    }
-
-    if (vms->secure && (kvm_enabled() || hvf_enabled())) {
-        error_report("mach-virt: %s does not support providing "
-                     "Security extensions (TrustZone) to the guest CPU",
-                     kvm_enabled() ? "KVM" : "HVF");
-        exit(1);
-    }
-
-    if (vms->virt && (kvm_enabled() || hvf_enabled())) {
-        error_report("mach-virt: %s does not support providing "
-                     "Virtualization extensions to the guest CPU",
-                     kvm_enabled() ? "KVM" : "HVF");
         exit(1);
     }
 

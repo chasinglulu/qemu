@@ -149,7 +149,6 @@ struct HobotVirtMachineState {
     bool its;
     bool tcg_its;
     bool virt;
-    bool mte;
     bool dtb_randomness;
     HobotVirtGICType gic_version;
     HobotVirtIOMMUType iommu;
