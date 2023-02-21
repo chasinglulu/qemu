@@ -2012,13 +2012,6 @@ static void machvirt_init(MachineState *machine)
         exit(1);
     }
 
-    if (vms->mte && (kvm_enabled() || hvf_enabled())) {
-        error_report("mach-virt: %s does not support providing "
-                     "MTE to the guest CPU",
-                     kvm_enabled() ? "KVM" : "HVF");
-        exit(1);
-    }
-
     create_fdt(vms);
 
     assert(possible_cpus->len == max_cpus);
@@ -2079,43 +2072,6 @@ static void machvirt_init(MachineState *machine)
         if (vms->secure) {
             object_property_set_link(cpuobj, "secure-memory",
                                      OBJECT(secure_sysmem), &error_abort);
-        }
-
-        if (vms->mte) {
-            /* Create the memory region only once, but link to all cpus. */
-            if (!tag_sysmem) {
-                /*
-                 * The property exists only if MemTag is supported.
-                 * If it is, we must allocate the ram to back that up.
-                 */
-                if (!object_property_find(cpuobj, "tag-memory")) {
-                    error_report("MTE requested, but not supported "
-                                 "by the guest CPU");
-                    exit(1);
-                }
-
-                tag_sysmem = g_new(MemoryRegion, 1);
-                memory_region_init(tag_sysmem, OBJECT(machine),
-                                   "tag-memory", UINT64_MAX / 32);
-
-                if (vms->secure) {
-                    secure_tag_sysmem = g_new(MemoryRegion, 1);
-                    memory_region_init(secure_tag_sysmem, OBJECT(machine),
-                                       "secure-tag-memory", UINT64_MAX / 32);
-
-                    /* As with ram, secure-tag takes precedence over tag.  */
-                    memory_region_add_subregion_overlap(secure_tag_sysmem, 0,
-                                                        tag_sysmem, -1);
-                }
-            }
-
-            object_property_set_link(cpuobj, "tag-memory", OBJECT(tag_sysmem),
-                                     &error_abort);
-            if (vms->secure) {
-                object_property_set_link(cpuobj, "secure-tag-memory",
-                                         OBJECT(secure_tag_sysmem),
-                                         &error_abort);
-            }
         }
 
         qdev_realize(DEVICE(cpuobj), NULL, &error_fatal);
@@ -2259,20 +2215,6 @@ static void virt_set_dtb_randomness(Object *obj, bool value, Error **errp)
     HobotVirtMachineState *vms = VIRT_MACHINE(obj);
 
     vms->dtb_randomness = value;
-}
-
-static bool virt_get_mte(Object *obj, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    return vms->mte;
-}
-
-static void virt_set_mte(Object *obj, bool value, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    vms->mte = value;
 }
 
 static char *virt_get_gic_version(Object *obj, Error **errp)
@@ -2463,13 +2405,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
      * configuration of the particular instance.
      */
     mc->max_cpus = 512;
-    machine_class_allow_dynamic_sysbus_dev(mc, TYPE_VFIO_CALXEDA_XGMAC);
-    machine_class_allow_dynamic_sysbus_dev(mc, TYPE_VFIO_AMD_XGBE);
-    machine_class_allow_dynamic_sysbus_dev(mc, TYPE_RAMFB_DEVICE);
-    machine_class_allow_dynamic_sysbus_dev(mc, TYPE_VFIO_PLATFORM);
-#ifdef CONFIG_TPM
-    machine_class_allow_dynamic_sysbus_dev(mc, TYPE_TPM_TIS_SYSBUS);
-#endif
     mc->block_default_type = IF_VIRTIO;
     mc->no_cdrom = 1;
     mc->pci_allow_0_address = true;
@@ -2521,12 +2456,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
     object_class_property_set_description(oc, "default-bus-bypass-iommu",
                                           "Set on/off to enable/disable "
                                           "bypass_iommu for default root bus");
-
-    object_class_property_add_bool(oc, "mte", virt_get_mte, virt_set_mte);
-    object_class_property_set_description(oc, "mte",
-                                          "Set on/off to enable/disable emulating a "
-                                          "guest CPU which implements the ARM "
-                                          "Memory Tagging Extension");
 
     object_class_property_add_bool(oc, "its", virt_get_its,
                                    virt_set_its);
@@ -2588,9 +2517,6 @@ static void virt_instance_init(Object *obj)
 
     /* The default root bus is attached to iommu by default */
     vms->default_bus_bypass_iommu = false;
-
-    /* MTE is disabled by default.  */
-    vms->mte = false;
 
     /* Supply kaslr-seed and rng-seed by default */
     vms->dtb_randomness = true;
