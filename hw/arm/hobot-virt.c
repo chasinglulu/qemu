@@ -680,7 +680,7 @@ static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
 
     fdt_add_gic_node(vms);
 
-    if ( vms->its) {
+    if (vms->its) {
         create_its(vms);
     }
 }
@@ -1990,45 +1990,6 @@ static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
     return ms->possible_cpus;
 }
 
-/*
- * for arm64 kvm_type [7-0] encodes the requested number of bits
- * in the IPA address space
- */
-static int virt_kvm_type(MachineState *ms, const char *type_str)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(ms);
-    int max_vm_pa_size, requested_pa_size;
-    bool fixed_ipa;
-
-    max_vm_pa_size = kvm_arm_get_max_vm_ipa_size(ms, &fixed_ipa);
-
-    /* we freeze the memory map to compute the highest gpa */
-    virt_set_memmap(vms, max_vm_pa_size);
-
-    requested_pa_size = 64 - clz64(vms->highest_gpa);
-
-    /*
-     * KVM requires the IPA size to be at least 32 bits.
-     */
-    if (requested_pa_size < 32) {
-        requested_pa_size = 32;
-    }
-
-    if (requested_pa_size > max_vm_pa_size) {
-        error_report("-m and ,maxmem option values "
-                     "require an IPA range (%d bits) larger than "
-                     "the one supported by the host (%d bits)",
-                     requested_pa_size, max_vm_pa_size);
-        exit(1);
-    }
-    /*
-     * We return the requested PA log size, unless KVM only supports
-     * the implicit legacy 40b IPA setting, in which case the kvm_type
-     * must be 0.
-     */
-    return fixed_ipa ? 0 : requested_pa_size;
-}
-
 static void virt_machine_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
@@ -2048,7 +2009,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
     mc->cpu_index_to_instance_props = virt_cpu_index_to_props;
     mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-a78ae");
     mc->get_default_cpu_node_id = virt_get_default_cpu_node_id;
-    mc->kvm_type = virt_kvm_type;
     mc->smp_props.clusters_supported = true;
     mc->auto_enable_numa_with_memhp = true;
     mc->auto_enable_numa_with_memdev = true;
