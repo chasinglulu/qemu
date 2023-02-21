@@ -2365,62 +2365,6 @@ static void virt_set_dtb_randomness(Object *obj, bool value, Error **errp)
     vms->dtb_randomness = value;
 }
 
-static char *virt_get_oem_id(Object *obj, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    return g_strdup(vms->oem_id);
-}
-
-static void virt_set_oem_id(Object *obj, const char *value, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-    size_t len = strlen(value);
-
-    if (len > 6) {
-        error_setg(errp,
-                   "User specified oem-id value is bigger than 6 bytes in size");
-        return;
-    }
-
-    strncpy(vms->oem_id, value, 6);
-}
-
-static char *virt_get_oem_table_id(Object *obj, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    return g_strdup(vms->oem_table_id);
-}
-
-static void virt_set_oem_table_id(Object *obj, const char *value,
-                                  Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-    size_t len = strlen(value);
-
-    if (len > 8) {
-        error_setg(errp,
-                   "User specified oem-table-id value is bigger than 8 bytes in size");
-        return;
-    }
-    strncpy(vms->oem_table_id, value, 8);
-}
-
-static bool virt_get_ras(Object *obj, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    return vms->ras;
-}
-
-static void virt_set_ras(Object *obj, bool value, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    vms->ras = value;
-}
-
 static bool virt_get_mte(Object *obj, Error **errp)
 {
     HobotVirtMachineState *vms = VIRT_MACHINE(obj);
@@ -2945,12 +2889,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
                                           "Set on/off to enable/disable "
                                           "bypass_iommu for default root bus");
 
-    object_class_property_add_bool(oc, "ras", virt_get_ras,
-                                   virt_set_ras);
-    object_class_property_set_description(oc, "ras",
-                                          "Set on/off to enable/disable reporting host memory errors "
-                                          "to a KVM guest using ACPI and guest external abort exceptions");
-
     object_class_property_add_bool(oc, "mte", virt_get_mte, virt_set_mte);
     object_class_property_set_description(oc, "mte",
                                           "Set on/off to enable/disable emulating a "
@@ -2975,24 +2913,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
                                    virt_set_dtb_randomness);
     object_class_property_set_description(oc, "dtb-kaslr-seed",
                                           "Deprecated synonym of dtb-randomness");
-
-    object_class_property_add_str(oc, "x-oem-id",
-                                  virt_get_oem_id,
-                                  virt_set_oem_id);
-    object_class_property_set_description(oc, "x-oem-id",
-                                          "Override the default value of field OEMID "
-                                          "in ACPI table header."
-                                          "The string may be up to 6 bytes in size");
-
-
-    object_class_property_add_str(oc, "x-oem-table-id",
-                                  virt_get_oem_table_id,
-                                  virt_set_oem_table_id);
-    object_class_property_set_description(oc, "x-oem-table-id",
-                                          "Override the default value of field OEM Table ID "
-                                          "in ACPI table header."
-                                          "The string may be up to 8 bytes in size");
-
 }
 
 static void virt_instance_init(Object *obj)
@@ -3035,9 +2955,6 @@ static void virt_instance_init(Object *obj)
 
     /* The default root bus is attached to iommu by default */
     vms->default_bus_bypass_iommu = false;
-
-    /* Default disallows RAS instantiation */
-    vms->ras = false;
 
     /* MTE is disabled by default.  */
     vms->mte = false;

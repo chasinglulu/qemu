@@ -149,10 +149,8 @@ struct HobotVirtMachineState {
     bool its;
     bool tcg_its;
     bool virt;
-    bool ras;
     bool mte;
     bool dtb_randomness;
-    OnOffAuto acpi;
     HobotVirtGICType gic_version;
     HobotVirtIOMMUType iommu;
     bool default_bus_bypass_iommu;
@@ -170,11 +168,8 @@ struct HobotVirtMachineState {
     int psci_conduit;
     hwaddr highest_gpa;
     DeviceState *gic;
-    //DeviceState *acpi_dev;
     Notifier powerdown_notifier;
     PCIBus *bus;
-    char *oem_id;
-    char *oem_table_id;
 };
 
 #define VIRT_ECAM_ID(high) (high ? VIRT_HIGH_PCIE_ECAM : VIRT_PCIE_ECAM)
