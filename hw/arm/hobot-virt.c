@@ -72,7 +72,6 @@
 #include "hw/acpi/acpi.h"
 #include "target/arm/internals.h"
 #include "hw/mem/memory-device.h"
-#include "hw/mem/pc-dimm.h"
 #include "hw/mem/nvdimm.h"
 #include "hw/acpi/generic_event_device.h"
 #include "hw/virtio/virtio-mem-pci.h"
@@ -2683,24 +2682,6 @@ static void virt_machine_device_plug_cb(HotplugHandler *hotplug_dev,
     }
 }
 
-static void virt_dimm_unplug(HotplugHandler *hotplug_dev,
-                             DeviceState *dev, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
-    Error *local_err = NULL;
-
-    //hotplug_handler_unplug(HOTPLUG_HANDLER(vms->acpi_dev), dev, &local_err);
-    // if (local_err) {
-    //     goto out;
-    // }
-
-    pc_dimm_unplug(PC_DIMM(dev), MACHINE(vms));
-    qdev_unrealize(dev);
-
-//out:
-    error_propagate(errp, local_err);
-}
-
 static void virt_machine_device_unplug_request_cb(HotplugHandler *hotplug_dev,
                                           DeviceState *dev, Error **errp)
 {
@@ -2715,12 +2696,9 @@ static void virt_machine_device_unplug_request_cb(HotplugHandler *hotplug_dev,
 static void virt_machine_device_unplug_cb(HotplugHandler *hotplug_dev,
                                           DeviceState *dev, Error **errp)
 {
-    if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
-        virt_dimm_unplug(hotplug_dev, dev, errp);
-    } else {
-        error_setg(errp, "virt: device unplug for unsupported device"
-                   " type: %s", object_get_typename(OBJECT(dev)));
-    }
+    error_setg(errp, "virt: device unplug for unsupported device"
+                " type: %s", object_get_typename(OBJECT(dev)));
+
 }
 
 static HotplugHandler *virt_machine_get_hotplug_handler(MachineState *machine,
@@ -2729,7 +2707,6 @@ static HotplugHandler *virt_machine_get_hotplug_handler(MachineState *machine,
     MachineClass *mc = MACHINE_GET_CLASS(machine);
 
     if (device_is_dynamic_sysbus(mc, dev) ||
-        object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM) ||
         object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MEM_PCI) ||
         object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_IOMMU_PCI)) {
         return HOTPLUG_HANDLER(machine);
