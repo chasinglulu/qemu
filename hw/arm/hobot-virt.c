@@ -326,12 +326,6 @@ static void fdt_add_timer_nodes(const HobotVirtMachineState *vms)
         irqflags = GIC_FDT_IRQ_FLAGS_EDGE_LO_HI;
     }
 
-    if (vms->gic_version == VIRT_GIC_VERSION_2) {
-        irqflags = deposit32(irqflags, GIC_FDT_IRQ_PPI_CPU_START,
-                             GIC_FDT_IRQ_PPI_CPU_WIDTH,
-                             (1 << MACHINE(vms)->smp.cpus) - 1);
-    }
-
     qemu_fdt_add_subnode(ms->fdt, "/timer");
 
     armcpu = ARM_CPU(qemu_get_cpu(0));
@@ -486,25 +480,6 @@ static void fdt_add_its_gic_node(HobotVirtMachineState *vms)
     g_free(nodename);
 }
 
-static void fdt_add_v2m_gic_node(HobotVirtMachineState *vms)
-{
-    MachineState *ms = MACHINE(vms);
-    char *nodename;
-
-    nodename = g_strdup_printf("/intc/v2m@%" PRIx64,
-                               vms->memmap[VIRT_GIC_V2M].base);
-    vms->msi_phandle = qemu_fdt_alloc_phandle(ms->fdt);
-    qemu_fdt_add_subnode(ms->fdt, nodename);
-    qemu_fdt_setprop_string(ms->fdt, nodename, "compatible",
-                            "arm,gic-v2m-frame");
-    qemu_fdt_setprop(ms->fdt, nodename, "msi-controller", NULL, 0);
-    qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
-                                 2, vms->memmap[VIRT_GIC_V2M].base,
-                                 2, vms->memmap[VIRT_GIC_V2M].size);
-    qemu_fdt_setprop_cell(ms->fdt, nodename, "phandle", vms->msi_phandle);
-    g_free(nodename);
-}
-
 static void fdt_add_gic_node(HobotVirtMachineState *vms)
 {
     MachineState *ms = MACHINE(vms);
@@ -521,16 +496,15 @@ static void fdt_add_gic_node(HobotVirtMachineState *vms)
     qemu_fdt_setprop_cell(ms->fdt, nodename, "#address-cells", 0x2);
     qemu_fdt_setprop_cell(ms->fdt, nodename, "#size-cells", 0x2);
     qemu_fdt_setprop(ms->fdt, nodename, "ranges", NULL, 0);
-    if (vms->gic_version != VIRT_GIC_VERSION_2) {
-        int nb_redist_regions = virt_gicv3_redist_region_count(vms);
+    int nb_redist_regions = virt_gicv3_redist_region_count(vms);
 
-        qemu_fdt_setprop_string(ms->fdt, nodename, "compatible",
-                                "arm,gic-v3");
+    qemu_fdt_setprop_string(ms->fdt, nodename, "compatible",
+                            "arm,gic-v3");
 
-        qemu_fdt_setprop_cell(ms->fdt, nodename,
-                              "#redistributor-regions", nb_redist_regions);
+    qemu_fdt_setprop_cell(ms->fdt, nodename,
+                            "#redistributor-regions", nb_redist_regions);
 
-        if (nb_redist_regions == 1) {
+    if (nb_redist_regions == 1) {
             qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
                                          2, vms->memmap[VIRT_GIC_DIST].base,
                                          2, vms->memmap[VIRT_GIC_DIST].size,
@@ -551,31 +525,6 @@ static void fdt_add_gic_node(HobotVirtMachineState *vms)
                                    GIC_FDT_IRQ_TYPE_PPI, ARCH_GIC_MAINT_IRQ,
                                    GIC_FDT_IRQ_FLAGS_LEVEL_HI);
         }
-    } else {
-        /* 'cortex-a15-gic' means 'GIC v2' */
-        qemu_fdt_setprop_string(ms->fdt, nodename, "compatible",
-                                "arm,cortex-a15-gic");
-        if (!vms->virt) {
-            qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
-                                         2, vms->memmap[VIRT_GIC_DIST].base,
-                                         2, vms->memmap[VIRT_GIC_DIST].size,
-                                         2, vms->memmap[VIRT_GIC_CPU].base,
-                                         2, vms->memmap[VIRT_GIC_CPU].size);
-        } else {
-            qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
-                                         2, vms->memmap[VIRT_GIC_DIST].base,
-                                         2, vms->memmap[VIRT_GIC_DIST].size,
-                                         2, vms->memmap[VIRT_GIC_CPU].base,
-                                         2, vms->memmap[VIRT_GIC_CPU].size,
-                                         2, vms->memmap[VIRT_GIC_HYP].base,
-                                         2, vms->memmap[VIRT_GIC_HYP].size,
-                                         2, vms->memmap[VIRT_GIC_VCPU].base,
-                                         2, vms->memmap[VIRT_GIC_VCPU].size);
-            qemu_fdt_setprop_cells(ms->fdt, nodename, "interrupts",
-                                   GIC_FDT_IRQ_TYPE_PPI, ARCH_GIC_MAINT_IRQ,
-                                   GIC_FDT_IRQ_FLAGS_LEVEL_HI);
-        }
-    }
 
     qemu_fdt_setprop_cell(ms->fdt, nodename, "phandle", vms->gic_phandle);
     g_free(nodename);
@@ -590,12 +539,6 @@ static void fdt_add_pmu_nodes(const HobotVirtMachineState *vms)
     if (!arm_feature(&armcpu->env, ARM_FEATURE_PMU)) {
         assert(!object_property_get_bool(OBJECT(armcpu), "pmu", NULL));
         return;
-    }
-
-    if (vms->gic_version == VIRT_GIC_VERSION_2) {
-        irqflags = deposit32(irqflags, GIC_FDT_IRQ_PPI_CPU_START,
-                             GIC_FDT_IRQ_PPI_CPU_WIDTH,
-                             (1 << MACHINE(vms)->smp.cpus) - 1);
     }
 
     qemu_fdt_add_subnode(ms->fdt, "/pmu");
@@ -635,27 +578,6 @@ static void create_its(HobotVirtMachineState *vms)
     vms->msi_controller = VIRT_MSI_CTRL_ITS;
 }
 
-static void create_v2m(HobotVirtMachineState *vms)
-{
-    int i;
-    int irq = vms->irqmap[VIRT_GIC_V2M];
-    DeviceState *dev;
-
-    dev = qdev_new("arm-gicv2m");
-    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, vms->memmap[VIRT_GIC_V2M].base);
-    qdev_prop_set_uint32(dev, "base-spi", irq);
-    qdev_prop_set_uint32(dev, "num-spi", NUM_GICV2M_SPIS);
-    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
-
-    for (i = 0; i < NUM_GICV2M_SPIS; i++) {
-        sysbus_connect_irq(SYS_BUS_DEVICE(dev), i,
-                           qdev_get_gpio_in(vms->gic, irq + i));
-    }
-
-    fdt_add_v2m_gic_node(vms);
-    vms->msi_controller = VIRT_MSI_CTRL_GICV2M;
-}
-
 static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
 {
     MachineState *ms = MACHINE(vms);
@@ -667,25 +589,9 @@ static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
     uint32_t nb_redist_regions = 0;
     int revision;
 
-    if (vms->gic_version == VIRT_GIC_VERSION_2) {
-        gictype = gic_class_name();
-    } else {
-        gictype = gicv3_class_name();
-    }
+    gictype = gicv3_class_name();
+    revision = 3;
 
-    switch (vms->gic_version) {
-    case VIRT_GIC_VERSION_2:
-        revision = 2;
-        break;
-    case VIRT_GIC_VERSION_3:
-        revision = 3;
-        break;
-    case VIRT_GIC_VERSION_4:
-        revision = 4;
-        break;
-    default:
-        g_assert_not_reached();
-    }
     vms->gic = qdev_new(gictype);
     qdev_prop_set_uint32(vms->gic, "revision", revision);
     qdev_prop_set_uint32(vms->gic, "num-cpu", smp_cpus);
@@ -697,52 +603,37 @@ static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
         qdev_prop_set_bit(vms->gic, "has-security-extensions", vms->secure);
     }
 
-    if (vms->gic_version != VIRT_GIC_VERSION_2) {
-        uint32_t redist0_capacity = virt_redist_capacity(vms, VIRT_GIC_REDIST);
-        uint32_t redist0_count = MIN(smp_cpus, redist0_capacity);
+    uint32_t redist0_capacity = virt_redist_capacity(vms, VIRT_GIC_REDIST);
+    uint32_t redist0_count = MIN(smp_cpus, redist0_capacity);
 
-        nb_redist_regions = virt_gicv3_redist_region_count(vms);
+    nb_redist_regions = virt_gicv3_redist_region_count(vms);
 
-        qdev_prop_set_uint32(vms->gic, "len-redist-region-count",
+    qdev_prop_set_uint32(vms->gic, "len-redist-region-count",
                              nb_redist_regions);
-        qdev_prop_set_uint32(vms->gic, "redist-region-count[0]", redist0_count);
+    qdev_prop_set_uint32(vms->gic, "redist-region-count[0]", redist0_count);
 
-        if (!kvm_irqchip_in_kernel()) {
-            if (vms->tcg_its) {
-                object_property_set_link(OBJECT(vms->gic), "sysmem",
+    if (!kvm_irqchip_in_kernel()) {
+        if (vms->tcg_its) {
+            object_property_set_link(OBJECT(vms->gic), "sysmem",
                                          OBJECT(mem), &error_fatal);
-                qdev_prop_set_bit(vms->gic, "has-lpi", true);
-            }
+            qdev_prop_set_bit(vms->gic, "has-lpi", true);
         }
+    }
 
-        if (nb_redist_regions == 2) {
-            uint32_t redist1_capacity =
-                virt_redist_capacity(vms, VIRT_HIGH_GIC_REDIST2);
+    if (nb_redist_regions == 2) {
+        uint32_t redist1_capacity =
+            virt_redist_capacity(vms, VIRT_HIGH_GIC_REDIST2);
 
-            qdev_prop_set_uint32(vms->gic, "redist-region-count[1]",
+        qdev_prop_set_uint32(vms->gic, "redist-region-count[1]",
                 MIN(smp_cpus - redist0_count, redist1_capacity));
-        }
-    } else {
-        if (!kvm_irqchip_in_kernel()) {
-            qdev_prop_set_bit(vms->gic, "has-virtualization-extensions",
-                              vms->virt);
-        }
     }
     gicbusdev = SYS_BUS_DEVICE(vms->gic);
     sysbus_realize_and_unref(gicbusdev, &error_fatal);
     sysbus_mmio_map(gicbusdev, 0, vms->memmap[VIRT_GIC_DIST].base);
-    if (vms->gic_version != VIRT_GIC_VERSION_2) {
-        sysbus_mmio_map(gicbusdev, 1, vms->memmap[VIRT_GIC_REDIST].base);
-        if (nb_redist_regions == 2) {
-            sysbus_mmio_map(gicbusdev, 2,
+    sysbus_mmio_map(gicbusdev, 1, vms->memmap[VIRT_GIC_REDIST].base);
+    if (nb_redist_regions == 2) {
+        sysbus_mmio_map(gicbusdev, 2,
                             vms->memmap[VIRT_HIGH_GIC_REDIST2].base);
-        }
-    } else {
-        sysbus_mmio_map(gicbusdev, 1, vms->memmap[VIRT_GIC_CPU].base);
-        if (vms->virt) {
-            sysbus_mmio_map(gicbusdev, 2, vms->memmap[VIRT_GIC_HYP].base);
-            sysbus_mmio_map(gicbusdev, 3, vms->memmap[VIRT_GIC_VCPU].base);
-        }
     }
 
     /* Wire the outputs from each CPU's generic timer and the GICv3
@@ -769,16 +660,10 @@ static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
                                                    ppibase + timer_irq[irq]));
         }
 
-        if (vms->gic_version != VIRT_GIC_VERSION_2) {
-            qemu_irq irq = qdev_get_gpio_in(vms->gic,
+        qemu_irq irq_in = qdev_get_gpio_in(vms->gic,
                                             ppibase + ARCH_GIC_MAINT_IRQ);
-            qdev_connect_gpio_out_named(cpudev, "gicv3-maintenance-interrupt",
-                                        0, irq);
-        } else if (vms->virt) {
-            qemu_irq irq = qdev_get_gpio_in(vms->gic,
-                                            ppibase + ARCH_GIC_MAINT_IRQ);
-            sysbus_connect_irq(gicbusdev, i + 4 * smp_cpus, irq);
-        }
+        qdev_connect_gpio_out_named(cpudev, "gicv3-maintenance-interrupt",
+                                        0, irq_in);
 
         qdev_connect_gpio_out_named(cpudev, "pmu-interrupt", 0,
                                     qdev_get_gpio_in(vms->gic, ppibase
@@ -795,10 +680,8 @@ static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
 
     fdt_add_gic_node(vms);
 
-    if (vms->gic_version != VIRT_GIC_VERSION_2 && vms->its) {
+    if ( vms->its) {
         create_its(vms);
-    } else if (vms->gic_version == VIRT_GIC_VERSION_2) {
-        create_v2m(vms);
     }
 }
 
@@ -1599,11 +1482,7 @@ static uint64_t virt_cpu_mp_affinity(HobotVirtMachineState *vms, int idx)
          * purposes are to make TCG consistent (with 64-bit KVM hosts)
          * and to improve SGI efficiency.
          */
-        if (vms->gic_version == VIRT_GIC_VERSION_2) {
-            clustersz = GIC_TARGETLIST_BITS;
-        } else {
-            clustersz = GICV3_TARGETLIST_BITS;
-        }
+        clustersz = GICV3_TARGETLIST_BITS;
     }
     return arm_cpu_mp_affinity(idx, clustersz);
 }
@@ -1706,47 +1585,6 @@ static void virt_set_memmap(HobotVirtMachineState *vms, int pa_bits)
 }
 
 /*
- * finalize_gic_version - Determines the final gic_version
- * according to the gic-version property
- *
- * Default GIC type is v2
- */
-static void finalize_gic_version(HobotVirtMachineState *vms)
-{
-    /* TCG mode */
-    switch (vms->gic_version) {
-    case VIRT_GIC_VERSION_NOSEL:
-        vms->gic_version = VIRT_GIC_VERSION_2;
-        break;
-    case VIRT_GIC_VERSION_MAX:
-        if (module_object_class_by_name("arm-gicv3")) {
-            /* CONFIG_ARM_GICV3_TCG was set */
-            if (vms->virt) {
-                /* GICv4 only makes sense if CPU has EL2 */
-                vms->gic_version = VIRT_GIC_VERSION_4;
-            } else {
-                vms->gic_version = VIRT_GIC_VERSION_3;
-            }
-        } else {
-            vms->gic_version = VIRT_GIC_VERSION_2;
-        }
-        break;
-    case VIRT_GIC_VERSION_HOST:
-        error_report("gic-version=host requires KVM");
-        exit(1);
-    case VIRT_GIC_VERSION_4:
-        if (!vms->virt) {
-            error_report("gic-version=4 requires virtualization enabled");
-            exit(1);
-        }
-        break;
-    case VIRT_GIC_VERSION_2:
-    case VIRT_GIC_VERSION_3:
-        break;
-    }
-}
-
-/*
  * virt_cpu_post_init() must be called after the CPUs have
  * been realized and the GIC has been created.
  */
@@ -1815,11 +1653,6 @@ static void machvirt_init(MachineState *machine)
         virt_set_memmap(vms, pa_bits);
     }
 
-    /* We can probe only here because during property set
-     * KVM is not available yet
-     */
-    finalize_gic_version(vms);
-
     if (vms->secure) {
         /*
          * The Secure view of the world is the same as the NonSecure,
@@ -1859,12 +1692,9 @@ static void machvirt_init(MachineState *machine)
      * many redistributors we can fit into the memory map (which in turn
      * depends on whether this is a GICv3 or v4).
      */
-    if (vms->gic_version == VIRT_GIC_VERSION_2) {
-        virt_max_cpus = GIC_NCPU;
-    } else {
-        virt_max_cpus = virt_redist_capacity(vms, VIRT_GIC_REDIST) +
+ 
+    virt_max_cpus = virt_redist_capacity(vms, VIRT_GIC_REDIST) +
             virt_redist_capacity(vms, VIRT_HIGH_GIC_REDIST2);
-    }
 
     if (max_cpus > virt_max_cpus) {
         error_report("Number of SMP CPUs requested (%d) exceeds max CPUs "
@@ -2078,48 +1908,6 @@ static void virt_set_dtb_randomness(Object *obj, bool value, Error **errp)
     vms->dtb_randomness = value;
 }
 
-static char *virt_get_gic_version(Object *obj, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-    const char *val;
-
-    switch (vms->gic_version) {
-    case VIRT_GIC_VERSION_4:
-        val = "4";
-        break;
-    case VIRT_GIC_VERSION_3:
-        val = "3";
-        break;
-    default:
-        val = "2";
-        break;
-    }
-    return g_strdup(val);
-}
-
-static void virt_set_gic_version(Object *obj, const char *value, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    vms->gic_version = VIRT_GIC_VERSION_3;
-    return;
-
-    if (!strcmp(value, "4")) {
-        vms->gic_version = VIRT_GIC_VERSION_4;
-    } else if (!strcmp(value, "3")) {
-        vms->gic_version = VIRT_GIC_VERSION_3;
-    } else if (!strcmp(value, "2")) {
-        vms->gic_version = VIRT_GIC_VERSION_2;
-    } else if (!strcmp(value, "host")) {
-        vms->gic_version = VIRT_GIC_VERSION_HOST; /* Will probe later */
-    } else if (!strcmp(value, "max")) {
-        vms->gic_version = VIRT_GIC_VERSION_MAX; /* Will probe later */
-    } else {
-        error_setg(errp, "Invalid gic-version value");
-        error_append_hint(errp, "Valid values are 3, 2, host, max.\n");
-    }
-}
-
 static char *virt_get_iommu(Object *obj, Error **errp)
 {
     HobotVirtMachineState *vms = VIRT_MACHINE(obj);
@@ -2285,12 +2073,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
                                           "Set on/off to enable/disable using "
                                           "physical address space above 32 bits");
 
-    object_class_property_add_str(oc, "gic-version", virt_get_gic_version,
-                                  virt_set_gic_version);
-    object_class_property_set_description(oc, "gic-version",
-                                          "Set GIC version. "
-                                          "Valid values are 2, 3, 4, host and max");
-
     object_class_property_add_str(oc, "iommu", virt_get_iommu, virt_set_iommu);
     object_class_property_set_description(oc, "iommu",
                                           "Set the IOMMU type. "
@@ -2332,7 +2114,6 @@ static void virt_instance_init(Object *obj)
 
     /* High memory is enabled by default */
     vms->highmem = true;
-    vms->gic_version = VIRT_GIC_VERSION_3;
 
     vms->highmem_ecam = !vmc->no_highmem_ecam;
     vms->highmem_mmio = true;

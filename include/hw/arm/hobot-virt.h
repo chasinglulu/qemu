@@ -108,15 +108,6 @@ typedef enum HobotVirtMSIControllerType {
     VIRT_MSI_CTRL_ITS,
 } HobotVirtMSIControllerType;
 
-typedef enum HobotVirtGICType {
-    VIRT_GIC_VERSION_MAX,
-    VIRT_GIC_VERSION_HOST,
-    VIRT_GIC_VERSION_2,
-    VIRT_GIC_VERSION_3,
-    VIRT_GIC_VERSION_4,
-    VIRT_GIC_VERSION_NOSEL,
-} HobotVirtGICType;
-
 struct HobotVirtMachineClass {
     MachineClass parent;
     bool disallow_affinity_adjustment;
@@ -150,7 +141,6 @@ struct HobotVirtMachineState {
     bool tcg_its;
     bool virt;
     bool dtb_randomness;
-    HobotVirtGICType gic_version;
     HobotVirtIOMMUType iommu;
     HobotVirtMSIControllerType msi_controller;
     uint16_t virtio_iommu_bdf;
@@ -183,11 +173,8 @@ static uint32_t virt_redist_capacity(HobotVirtMachineState *vms, int region)
 {
     uint32_t redist_size;
 
-    if (vms->gic_version == VIRT_GIC_VERSION_3) {
-        redist_size = GICV3_REDIST_SIZE;
-    } else {
-        redist_size = GICV4_REDIST_SIZE;
-    }
+    redist_size = GICV3_REDIST_SIZE;
+
     return vms->memmap[region].size / redist_size;
 }
 
@@ -195,8 +182,6 @@ static uint32_t virt_redist_capacity(HobotVirtMachineState *vms, int region)
 static inline int virt_gicv3_redist_region_count(HobotVirtMachineState *vms)
 {
     uint32_t redist0_capacity = virt_redist_capacity(vms, VIRT_GIC_REDIST);
-
-    assert(vms->gic_version != VIRT_GIC_VERSION_2);
 
     return (MACHINE(vms)->smp.cpus > redist0_capacity &&
             vms->highmem_redists) ? 2 : 1;
