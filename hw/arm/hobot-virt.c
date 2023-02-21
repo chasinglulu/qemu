@@ -72,7 +72,6 @@
 #include "hw/acpi/acpi.h"
 #include "target/arm/internals.h"
 #include "hw/mem/memory-device.h"
-#include "hw/mem/nvdimm.h"
 #include "hw/acpi/generic_event_device.h"
 #include "hw/virtio/virtio-mem-pci.h"
 #include "hw/virtio/virtio-iommu.h"
@@ -148,9 +147,6 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_GPIO] =               { 0x09030000, 0x00001000 },
     [VIRT_SECURE_UART] =        { 0x09040000, 0x00001000 },
     [VIRT_SMMU] =               { 0x09050000, 0x00020000 },
-    [VIRT_PCDIMM_ACPI] =        { 0x09070000, MEMORY_HOTPLUG_IO_LEN },
-    [VIRT_ACPI_GED] =           { 0x09080000, ACPI_GED_EVT_SEL_LEN },
-    [VIRT_NVDIMM_ACPI] =        { 0x09090000, NVDIMM_ACPI_IO_LEN},
     [VIRT_PVTIME] =             { 0x090a0000, 0x00010000 },
     [VIRT_SECURE_GPIO] =        { 0x090b0000, 0x00001000 },
     [VIRT_MMIO] =               { 0x0a000000, 0x00000200 },
@@ -610,33 +606,6 @@ static void fdt_add_pmu_nodes(const HobotVirtMachineState *vms)
         qemu_fdt_setprop_cells(ms->fdt, "/pmu", "interrupts",
                                GIC_FDT_IRQ_TYPE_PPI, VIRTUAL_PMU_IRQ, irqflags);
     }
-}
-
-static inline DeviceState *create_acpi_ged(HobotVirtMachineState *vms)
-{
-    DeviceState *dev;
-    MachineState *ms = MACHINE(vms);
-    int irq = vms->irqmap[VIRT_ACPI_GED];
-    uint32_t event = ACPI_GED_PWR_DOWN_EVT;
-
-    if (ms->ram_slots) {
-        event |= ACPI_GED_MEM_HOTPLUG_EVT;
-    }
-
-    if (ms->nvdimms_state->is_enabled) {
-        event |= ACPI_GED_NVDIMM_HOTPLUG_EVT;
-    }
-
-    dev = qdev_new(TYPE_ACPI_GED);
-    qdev_prop_set_uint32(dev, "ged-event", event);
-
-    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, vms->memmap[VIRT_ACPI_GED].base);
-    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 1, vms->memmap[VIRT_PCDIMM_ACPI].base);
-    sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(vms->gic, irq));
-
-    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
-
-    return dev;
 }
 
 static void create_its(HobotVirtMachineState *vms)
@@ -2209,18 +2178,6 @@ static void machvirt_init(MachineState *machine)
 
     create_platform_bus(vms);
 
-    if (machine->nvdimms_state->is_enabled) {
-        const struct AcpiGenericAddress arm_virt_nvdimm_acpi_dsmio = {
-            .space_id = AML_AS_SYSTEM_MEMORY,
-            .address = vms->memmap[VIRT_NVDIMM_ACPI].base,
-            .bit_width = NVDIMM_ACPI_IO_LEN << 3
-        };
-
-        nvdimm_init_acpi_state(machine->nvdimms_state, sysmem,
-                               arm_virt_nvdimm_acpi_dsmio,
-                               vms->fw_cfg, OBJECT(vms));
-    }
-
     vms->bootinfo.ram_size = machine->ram_size;
     vms->bootinfo.board_id = -1;
     vms->bootinfo.loader_start = vms->memmap[VIRT_MEM].base;
@@ -2523,7 +2480,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
     mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-a78ae");
     mc->get_default_cpu_node_id = virt_get_default_cpu_node_id;
     mc->kvm_type = virt_kvm_type;
-    mc->nvdimm_supported = true;
     mc->smp_props.clusters_supported = true;
     mc->auto_enable_numa_with_memhp = true;
     mc->auto_enable_numa_with_memdev = true;
