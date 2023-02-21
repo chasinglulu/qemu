@@ -1373,31 +1373,6 @@ static void create_smmu(const HobotVirtMachineState *vms,
     g_free(node);
 }
 
-static void create_virtio_iommu_dt_bindings(HobotVirtMachineState *vms)
-{
-    const char compat[] = "virtio,pci-iommu";
-    uint16_t bdf = vms->virtio_iommu_bdf;
-    MachineState *ms = MACHINE(vms);
-    char *node;
-
-    vms->iommu_phandle = qemu_fdt_alloc_phandle(ms->fdt);
-
-    node = g_strdup_printf("%s/virtio_iommu@%d", vms->pciehb_nodename, bdf);
-    qemu_fdt_add_subnode(ms->fdt, node);
-    qemu_fdt_setprop(ms->fdt, node, "compatible", compat, sizeof(compat));
-    qemu_fdt_setprop_sized_cells(ms->fdt, node, "reg",
-                                 1, bdf << 8, 1, 0, 1, 0,
-                                 1, 0, 1, 0);
-
-    qemu_fdt_setprop_cell(ms->fdt, node, "#iommu-cells", 1);
-    qemu_fdt_setprop_cell(ms->fdt, node, "phandle", vms->iommu_phandle);
-    g_free(node);
-
-    qemu_fdt_setprop_cells(ms->fdt, vms->pciehb_nodename, "iommu-map",
-                           0x0, vms->iommu_phandle, 0x0, bdf,
-                           bdf + 1, vms->iommu_phandle, bdf + 1, 0xffff - bdf);
-}
-
 static void create_pcie(HobotVirtMachineState *vms)
 {
     hwaddr base_mmio = vms->memmap[VIRT_PCIE_MMIO].base;
@@ -2482,103 +2457,6 @@ static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
     return ms->possible_cpus;
 }
 
-static void virt_memory_plug(HotplugHandler *hotplug_dev,
-                             DeviceState *dev, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
-    MachineState *ms = MACHINE(hotplug_dev);
-    bool is_nvdimm = object_dynamic_cast(OBJECT(dev), TYPE_NVDIMM);
-
-    pc_dimm_plug(PC_DIMM(dev), MACHINE(vms));
-
-    if (is_nvdimm) {
-        nvdimm_plug(ms->nvdimms_state);
-    }
-
-    //hotplug_handler_plug(HOTPLUG_HANDLER(vms->acpi_dev),
-    //                     dev, &error_abort);
-}
-
-static void virt_virtio_md_pci_plug(HotplugHandler *hotplug_dev,
-                                    DeviceState *dev, Error **errp)
-{
-    HotplugHandler *hotplug_dev2 = qdev_get_bus_hotplug_handler(dev);
-    Error *local_err = NULL;
-
-    /*
-     * Plug the memory device first and then branch off to the actual
-     * hotplug handler. If that one fails, we can easily undo the memory
-     * device bits.
-     */
-    memory_device_plug(MEMORY_DEVICE(dev), MACHINE(hotplug_dev));
-    if (hotplug_dev2) {
-        hotplug_handler_plug(hotplug_dev2, dev, &local_err);
-        if (local_err) {
-            memory_device_unplug(MEMORY_DEVICE(dev), MACHINE(hotplug_dev));
-        }
-    }
-    error_propagate(errp, local_err);
-}
-
-static void virt_virtio_md_pci_unplug_request(HotplugHandler *hotplug_dev,
-                                              DeviceState *dev, Error **errp)
-{
-    /* We don't support hot unplug of virtio based memory devices */
-    error_setg(errp, "virtio based memory devices cannot be unplugged.");
-}
-
-static void virt_machine_device_plug_cb(HotplugHandler *hotplug_dev,
-                                        DeviceState *dev, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
-    printf("%s\n", __func__);
-
-    if (vms->platform_bus_dev) {
-        MachineClass *mc = MACHINE_GET_CLASS(vms);
-
-        if (device_is_dynamic_sysbus(mc, dev)) {
-            platform_bus_link_device(PLATFORM_BUS_DEVICE(vms->platform_bus_dev),
-                                     SYS_BUS_DEVICE(dev));
-        }
-    }
-    if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
-        virt_memory_plug(hotplug_dev, dev, errp);
-    }
-
-    if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MEM_PCI)) {
-        virt_virtio_md_pci_plug(hotplug_dev, dev, errp);
-    }
-
-    if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_IOMMU_PCI)) {
-        PCIDevice *pdev = PCI_DEVICE(dev);
-
-        vms->iommu = VIRT_IOMMU_VIRTIO;
-        vms->virtio_iommu_bdf = pci_get_bdf(pdev);
-        create_virtio_iommu_dt_bindings(vms);
-    }
-}
-
-static void virt_machine_device_unplug_request_cb(HotplugHandler *hotplug_dev,
-                                          DeviceState *dev, Error **errp)
-{
-    printf("%s\n", __func__);
-   if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MEM_PCI)) {
-        virt_virtio_md_pci_unplug_request(hotplug_dev, dev, errp);
-    } else {
-        error_setg(errp, "device unplug request for unsupported device"
-                   " type: %s", object_get_typename(OBJECT(dev)));
-    }
-}
-
-static void virt_machine_device_unplug_cb(HotplugHandler *hotplug_dev,
-                                          DeviceState *dev, Error **errp)
-{
-    printf("%s\n", __func__);
-    error_setg(errp, "virt: device unplug for unsupported device"
-                " type: %s", object_get_typename(OBJECT(dev)));
-
-}
-
 /*
  * for arm64 kvm_type [7-0] encodes the requested number of bits
  * in the IPA address space
@@ -2621,7 +2499,6 @@ static int virt_kvm_type(MachineState *ms, const char *type_str)
 static void virt_machine_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
-    HotplugHandlerClass *hc = HOTPLUG_HANDLER_CLASS(oc);
 
     mc->init = machvirt_init;
     /* Start with max_cpus set to 512, which is the maximum supported by KVM.
@@ -2646,9 +2523,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
     mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-a78ae");
     mc->get_default_cpu_node_id = virt_get_default_cpu_node_id;
     mc->kvm_type = virt_kvm_type;
-    hc->plug = virt_machine_device_plug_cb;
-    hc->unplug_request = virt_machine_device_unplug_request_cb;
-    hc->unplug = virt_machine_device_unplug_cb;
     mc->nvdimm_supported = true;
     mc->smp_props.clusters_supported = true;
     mc->auto_enable_numa_with_memhp = true;
