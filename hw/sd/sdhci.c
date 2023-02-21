@@ -579,7 +579,7 @@ static void sdhci_sdma_transfer_multi_blocks(SDHCIState *s)
     bool page_aligned = false;
     unsigned int begin;
     const uint16_t block_size = s->blksize & BLOCK_SIZE_MASK;
-    uint32_t boundary_chk = 1 << (((s->blksize & ~BLOCK_SIZE_MASK) >> 12) + 12);
+    uint32_t boundary_chk = 1 << (((s->blksize & ~BLOCK_SIZE_MASK) >> 12) + 19);
     uint32_t boundary_count = boundary_chk - (s->sdmasysad % boundary_chk);
 
     if (!(s->trnmod & SDHC_TRNS_BLK_CNT_EN) || !s->blkcnt) {
@@ -656,6 +656,10 @@ static void sdhci_sdma_transfer_multi_blocks(SDHCIState *s)
             s->norintsts |= SDHC_NIS_DMA;
         }
         sdhci_update_irq(s);
+
+        /* we have unfinished business - reschedule to continue SDMA */
+        timer_mod(s->transfer_timer,
+                    qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + SDHC_TRANSFER_DELAY);
     }
 }
 
@@ -908,8 +912,10 @@ static void sdhci_data_transfer(void *opaque)
         switch (SDHC_DMA_TYPE(s->hostctl1)) {
         case SDHC_CTRL_SDMA:
             if ((s->blkcnt == 1) || !(s->trnmod & SDHC_TRNS_MULTI)) {
+                qemu_log_mask(LOG_STRACE, "Entry single SDMA handler");
                 sdhci_sdma_transfer_single_block(s);
             } else {
+                qemu_log_mask(LOG_STRACE, "Entry multi SDMA handler");
                 sdhci_sdma_transfer_multi_blocks(s);
             }
 
