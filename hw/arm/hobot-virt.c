@@ -184,7 +184,6 @@ static const int a15irqmap[] = {
     [VIRT_PCIE] = 3, /* ... to 6 */
     [VIRT_GPIO] = 7,
     [VIRT_SECURE_UART] = 8,
-    [VIRT_ACPI_GED] = 9,
     [VIRT_MMIO] = 16, /* ...to 16 + NUM_VIRTIO_TRANSPORTS - 1 */
     [VIRT_GIC_V2M] = 48, /* ...to 48 + NUM_GICV2M_SPIS - 1 */
     [VIRT_SMMU] = 74,    /* ...to 74 + NUM_SMMU_IRQS - 1 */
@@ -556,10 +555,8 @@ static void create_its(HobotVirtMachineState *vms)
     const char *itsclass = its_class_name();
     DeviceState *dev;
 
-    if (!strcmp(itsclass, "arm-gicv3-its")) {
-        if (!vms->tcg_its) {
+    if (strcmp(itsclass, "arm-gicv3-its")) {
             itsclass = NULL;
-        }
     }
 
     if (!itsclass) {
@@ -612,13 +609,9 @@ static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
                              nb_redist_regions);
     qdev_prop_set_uint32(vms->gic, "redist-region-count[0]", redist0_count);
 
-    if (!kvm_irqchip_in_kernel()) {
-        if (vms->tcg_its) {
-            object_property_set_link(OBJECT(vms->gic), "sysmem",
-                                         OBJECT(mem), &error_fatal);
-            qdev_prop_set_bit(vms->gic, "has-lpi", true);
-        }
-    }
+    object_property_set_link(OBJECT(vms->gic), "sysmem",
+                                    OBJECT(mem), &error_fatal);
+    qdev_prop_set_bit(vms->gic, "has-lpi", true);
 
     if (nb_redist_regions == 2) {
         uint32_t redist1_capacity =
@@ -680,9 +673,7 @@ static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
 
     fdt_add_gic_node(vms);
 
-    if (vms->its) {
-        create_its(vms);
-    }
+    create_its(vms);
 }
 
 static void create_uart(const HobotVirtMachineState *vms, int uart,
@@ -1880,20 +1871,6 @@ static void virt_set_highmem(Object *obj, bool value, Error **errp)
     vms->highmem = value;
 }
 
-static bool virt_get_its(Object *obj, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    return vms->its;
-}
-
-static void virt_set_its(Object *obj, bool value, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    vms->its = value;
-}
-
 static bool virt_get_dtb_randomness(Object *obj, Error **errp)
 {
     HobotVirtMachineState *vms = VIRT_MACHINE(obj);
@@ -2038,12 +2015,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
                                           "Set the IOMMU type. "
                                           "Valid values are none and smmuv3");
 
-    object_class_property_add_bool(oc, "its", virt_get_its,
-                                   virt_set_its);
-    object_class_property_set_description(oc, "its",
-                                          "Set on/off to enable/disable "
-                                          "ITS instantiation");
-
     object_class_property_add_bool(oc, "dtb-randomness",
                                    virt_get_dtb_randomness,
                                    virt_set_dtb_randomness);
@@ -2078,19 +2049,6 @@ static void virt_instance_init(Object *obj)
     vms->highmem_ecam = !vmc->no_highmem_ecam;
     vms->highmem_mmio = true;
     vms->highmem_redists = true;
-
-    //if (vmc->no_its) {
-    vms->its = false;
-    // } else {
-    //     /* Default allows ITS instantiation */
-    //     vms->its = true;
-
-    //     if (vmc->no_tcg_its) {
-    //         vms->tcg_its = false;
-    //     } else {
-    //         vms->tcg_its = true;
-    //     }
-    // }
 
     /* Default disallows iommu instantiation */
     vms->iommu = VIRT_IOMMU_NONE;

@@ -82,9 +82,6 @@ enum {
     VIRT_SECURE_UART,
     VIRT_SECURE_MEM,
     VIRT_SECURE_GPIO,
-    VIRT_PCDIMM_ACPI,
-    VIRT_ACPI_GED,
-    VIRT_NVDIMM_ACPI,
     VIRT_PVTIME,
     VIRT_LOWMEMMAP_LAST,
 };
@@ -111,8 +108,6 @@ typedef enum HobotVirtMSIControllerType {
 struct HobotVirtMachineClass {
     MachineClass parent;
     bool disallow_affinity_adjustment;
-    bool no_its;
-    bool no_tcg_its;
     bool no_pmu;
     bool claim_edge_triggered_timers;
     bool smbios_old_sys_ver;
@@ -137,13 +132,10 @@ struct HobotVirtMachineState {
     bool highmem_ecam;
     bool highmem_mmio;
     bool highmem_redists;
-    bool its;
-    bool tcg_its;
     bool virt;
     bool dtb_randomness;
     HobotVirtIOMMUType iommu;
     HobotVirtMSIControllerType msi_controller;
-    uint16_t virtio_iommu_bdf;
     struct arm_boot_info bootinfo;
     MemMapEntry *memmap;
     char *pciehb_nodename;
@@ -164,9 +156,6 @@ struct HobotVirtMachineState {
 
 #define TYPE_VIRT_MACHINE   MACHINE_TYPE_NAME("hobot-virt")
 OBJECT_DECLARE_TYPE(HobotVirtMachineState, HobotVirtMachineClass, VIRT_MACHINE)
-
-void virt_acpi_setup(HobotVirtMachineState *vms);
-bool virt_is_acpi_enabled(HobotVirtMachineState *vms);
 
 /* Return number of redistributors that fit in the specified region */
 static uint32_t virt_redist_capacity(HobotVirtMachineState *vms, int region)
