@@ -68,11 +68,6 @@ enum {
     VIRT_MMIO,
     VIRT_SDHCI,
     VIRT_FW_CFG,
-    VIRT_PCIE,
-    VIRT_PCIE_MMIO,
-    VIRT_PCIE_PIO,
-    VIRT_PCIE_ECAM,
-    VIRT_PLATFORM_BUS,
     VIRT_GPIO,
     VIRT_SECURE_UART,
     VIRT_SECURE_MEM,
@@ -84,8 +79,6 @@ enum {
 /* indices of IO regions located after the RAM */
 enum {
     VIRT_HIGH_GIC_REDIST2 =  VIRT_LOWMEMMAP_LAST,
-    VIRT_HIGH_PCIE_ECAM,
-    VIRT_HIGH_PCIE_MMIO,
 };
 
 typedef enum HobotVirtMSIControllerType {
@@ -115,8 +108,6 @@ struct HobotVirtMachineState {
     PFlashCFI01 *flash[2];
     bool secure;
     bool highmem;
-    bool highmem_ecam;
-    bool highmem_mmio;
     bool highmem_redists;
     bool virt;
     bool dtb_randomness;

@@ -121,9 +121,6 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_MMIO] =               { 0x0a000000, 0x00000200 },
     /* ...repeating for a total of NUM_VIRTIO_TRANSPORTS, each of that size */
     [VIRT_SECURE_MEM] =         { 0x0e000000, 0x01000000 },
-    [VIRT_PCIE_MMIO] =          { 0x40000000, 0x2eff0000 },
-    [VIRT_PCIE_PIO] =           { 0x6eff0000, 0x00010000 },
-    [VIRT_PCIE_ECAM] =          { 0x6f000000, 0x01000000 },
     /* Actual RAM size depends on initial RAM and device memory settings */
     [VIRT_MEM] =                { 2*GiB, (254UL * GiB) },
 };
@@ -141,15 +138,11 @@ static const MemMapEntry base_memmap[] = {
 static MemMapEntry extended_memmap[] = {
     /* Additional 64 MB redist region (can contain up to 512 redistributors) */
     [VIRT_HIGH_GIC_REDIST2] =   { 0x0, 64 * MiB },
-    [VIRT_HIGH_PCIE_ECAM] =     { 0x0, 256 * MiB },
-    /* Second PCIe window */
-    [VIRT_HIGH_PCIE_MMIO] =     { 0x0, 512 * GiB },
 };
 
 static const int a78irqmap[] = {
     [VIRT_UART] = 73,
     [VIRT_SDHCI] = 120,
-    [VIRT_PCIE] = 3, /* ... to 6 */
     [VIRT_GPIO] = 7,
     [VIRT_SECURE_UART] = 8,
     [VIRT_MMIO] = 16, /* ...to 16 + NUM_VIRTIO_TRANSPORTS - 1 */
@@ -1096,165 +1089,6 @@ static FWCfgState *create_fw_cfg(const HobotVirtMachineState *vms, AddressSpace 
     return fw_cfg;
 }
 
-static void create_pcie_irq_map(const MachineState *ms,
-                                uint32_t gic_phandle,
-                                int first_irq, const char *nodename)
-{
-    int devfn, pin;
-    uint32_t full_irq_map[4 * 4 * 10] = { 0 };
-    uint32_t *irq_map = full_irq_map;
-
-    for (devfn = 0; devfn <= 0x18; devfn += 0x8) {
-        for (pin = 0; pin < 4; pin++) {
-            int irq_type = GIC_FDT_IRQ_TYPE_SPI;
-            int irq_nr = first_irq + ((pin + PCI_SLOT(devfn)) % PCI_NUM_PINS);
-            int irq_level = GIC_FDT_IRQ_FLAGS_LEVEL_HI;
-            int i;
-
-            uint32_t map[] = {
-                devfn << 8, 0, 0,                           /* devfn */
-                pin + 1,                                    /* PCI pin */
-                gic_phandle, 0, 0, irq_type, irq_nr, irq_level }; /* GIC irq */
-
-            /* Convert map to big endian */
-            for (i = 0; i < 10; i++) {
-                irq_map[i] = cpu_to_be32(map[i]);
-            }
-            irq_map += 10;
-        }
-    }
-
-    qemu_fdt_setprop(ms->fdt, nodename, "interrupt-map",
-                     full_irq_map, sizeof(full_irq_map));
-
-    qemu_fdt_setprop_cells(ms->fdt, nodename, "interrupt-map-mask",
-                           cpu_to_be16(PCI_DEVFN(3, 0)), /* Slot 3 */
-                           0, 0,
-                           0x7           /* PCI irq */);
-}
-
-static void create_pcie(HobotVirtMachineState *vms)
-{
-    hwaddr base_mmio = vms->memmap[VIRT_PCIE_MMIO].base;
-    hwaddr size_mmio = vms->memmap[VIRT_PCIE_MMIO].size;
-    hwaddr base_mmio_high = vms->memmap[VIRT_HIGH_PCIE_MMIO].base;
-    hwaddr size_mmio_high = vms->memmap[VIRT_HIGH_PCIE_MMIO].size;
-    hwaddr base_pio = vms->memmap[VIRT_PCIE_PIO].base;
-    hwaddr size_pio = vms->memmap[VIRT_PCIE_PIO].size;
-    hwaddr base_ecam, size_ecam;
-    hwaddr base = base_mmio;
-    int nr_pcie_buses;
-    int irq = vms->irqmap[VIRT_PCIE];
-    MemoryRegion *mmio_alias;
-    MemoryRegion *mmio_reg;
-    MemoryRegion *ecam_alias;
-    MemoryRegion *ecam_reg;
-    DeviceState *dev;
-    char *nodename;
-    int i, ecam_id;
-    PCIHostState *pci;
-    MachineState *ms = MACHINE(vms);
-
-    dev = qdev_new(TYPE_GPEX_HOST);
-    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
-
-    ecam_id = VIRT_ECAM_ID(vms->highmem_ecam);
-    base_ecam = vms->memmap[ecam_id].base;
-    size_ecam = vms->memmap[ecam_id].size;
-    nr_pcie_buses = size_ecam / PCIE_MMCFG_SIZE_MIN;
-    /* Map only the first size_ecam bytes of ECAM space */
-    ecam_alias = g_new0(MemoryRegion, 1);
-    ecam_reg = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
-    memory_region_init_alias(ecam_alias, OBJECT(dev), "pcie-ecam",
-                             ecam_reg, 0, size_ecam);
-    memory_region_add_subregion(get_system_memory(), base_ecam, ecam_alias);
-
-    /* Map the MMIO window into system address space so as to expose
-     * the section of PCI MMIO space which starts at the same base address
-     * (ie 1:1 mapping for that part of PCI MMIO space visible through
-     * the window).
-     */
-    mmio_alias = g_new0(MemoryRegion, 1);
-    mmio_reg = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 1);
-    memory_region_init_alias(mmio_alias, OBJECT(dev), "pcie-mmio",
-                             mmio_reg, base_mmio, size_mmio);
-    memory_region_add_subregion(get_system_memory(), base_mmio, mmio_alias);
-
-    if (vms->highmem_mmio) {
-        /* Map high MMIO space */
-        MemoryRegion *high_mmio_alias = g_new0(MemoryRegion, 1);
-
-        memory_region_init_alias(high_mmio_alias, OBJECT(dev), "pcie-mmio-high",
-                                 mmio_reg, base_mmio_high, size_mmio_high);
-        memory_region_add_subregion(get_system_memory(), base_mmio_high,
-                                    high_mmio_alias);
-    }
-
-    /* Map IO port space */
-    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 2, base_pio);
-
-    for (i = 0; i < GPEX_NUM_IRQS; i++) {
-        sysbus_connect_irq(SYS_BUS_DEVICE(dev), i,
-                           qdev_get_gpio_in(vms->gic, irq + i));
-        gpex_set_irq_num(GPEX_HOST(dev), i, irq + i);
-    }
-
-    pci = PCI_HOST_BRIDGE(dev);
-    pci->bypass_iommu = false;
-    vms->bus = pci->bus;
-    if (vms->bus) {
-        for (i = 0; i < nb_nics; i++) {
-            NICInfo *nd = &nd_table[i];
-
-            if (!nd->model) {
-                nd->model = g_strdup("virtio");
-            }
-
-            pci_nic_init_nofail(nd, pci->bus, nd->model, NULL);
-        }
-    }
-
-    nodename = vms->pciehb_nodename = g_strdup_printf("/pcie@%" PRIx64, base);
-    qemu_fdt_add_subnode(ms->fdt, nodename);
-    qemu_fdt_setprop_string(ms->fdt, nodename,
-                            "compatible", "pci-host-ecam-generic");
-    qemu_fdt_setprop_string(ms->fdt, nodename, "device_type", "pci");
-    qemu_fdt_setprop_cell(ms->fdt, nodename, "#address-cells", 3);
-    qemu_fdt_setprop_cell(ms->fdt, nodename, "#size-cells", 2);
-    qemu_fdt_setprop_cell(ms->fdt, nodename, "linux,pci-domain", 0);
-    qemu_fdt_setprop_cells(ms->fdt, nodename, "bus-range", 0,
-                           nr_pcie_buses - 1);
-    qemu_fdt_setprop(ms->fdt, nodename, "dma-coherent", NULL, 0);
-
-    if (vms->msi_phandle) {
-        qemu_fdt_setprop_cells(ms->fdt, nodename, "msi-parent",
-                               vms->msi_phandle);
-    }
-
-    qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
-                                 2, base_ecam, 2, size_ecam);
-
-    if (vms->highmem_mmio) {
-        qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "ranges",
-                                     1, FDT_PCI_RANGE_IOPORT, 2, 0,
-                                     2, base_pio, 2, size_pio,
-                                     1, FDT_PCI_RANGE_MMIO, 2, base_mmio,
-                                     2, base_mmio, 2, size_mmio,
-                                     1, FDT_PCI_RANGE_MMIO_64BIT,
-                                     2, base_mmio_high,
-                                     2, base_mmio_high, 2, size_mmio_high);
-    } else {
-        qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "ranges",
-                                     1, FDT_PCI_RANGE_IOPORT, 2, 0,
-                                     2, base_pio, 2, size_pio,
-                                     1, FDT_PCI_RANGE_MMIO, 2, base_mmio,
-                                     2, base_mmio, 2, size_mmio);
-    }
-
-    qemu_fdt_setprop_cell(ms->fdt, nodename, "#interrupt-cells", 1);
-    create_pcie_irq_map(ms, vms->gic_phandle, irq, nodename);
-}
-
 static void create_secure_ram(HobotVirtMachineState *vms,
                               MemoryRegion *secure_sysmem,
                               MemoryRegion *secure_tag_sysmem)
@@ -1300,25 +1134,11 @@ void virt_machine_done(Notifier *notifier, void *data)
     struct arm_boot_info *info = &vms->bootinfo;
     AddressSpace *as = arm_boot_address_space(cpu, info);
 
-    /*
-     * If the user provided a dtb, we assume the dynamic sysbus nodes
-     * already are integrated there. This corresponds to a use case where
-     * the dynamic sysbus nodes are complex and their generation is not yet
-     * supported. In that case the user can take charge of the guest dt
-     * while qemu takes charge of the qom stuff.
-     */
-    if (info->dtb_filename == NULL) {
-        platform_bus_add_all_fdt_nodes(ms->fdt, "/intc",
-                                       vms->memmap[VIRT_PLATFORM_BUS].base,
-                                       vms->memmap[VIRT_PLATFORM_BUS].size,
-                                       vms->irqmap[VIRT_PLATFORM_BUS]);
-    }
     if (arm_load_dtb(info->dtb_start, info, info->dtb_limit, as, ms) < 0) {
         exit(1);
     }
 
     fw_cfg_add_extra_pci_roots(vms->bus, vms->fw_cfg);
-
 }
 
 static uint64_t virt_cpu_mp_affinity(HobotVirtMachineState *vms, int idx)
@@ -1421,12 +1241,6 @@ static void virt_set_memmap(HobotVirtMachineState *vms, int pa_bits)
         case VIRT_HIGH_GIC_REDIST2:
             vms->highmem_redists &= fits;
             break;
-        case VIRT_HIGH_PCIE_ECAM:
-            vms->highmem_ecam &= fits;
-            break;
-        case VIRT_HIGH_PCIE_MMIO:
-            vms->highmem_mmio &= fits;
-            break;
         }
 
         base += size;
@@ -1472,7 +1286,6 @@ static void machvirt_init(MachineState *machine)
     MemoryRegion *secure_sysmem = NULL;
     int n, virt_max_cpus;
     bool firmware_loaded;
-    bool aarch64 = true;
     unsigned int smp_cpus = machine->smp.cpus;
     unsigned int max_cpus = machine->smp.max_cpus;
 
@@ -1575,8 +1388,6 @@ static void machvirt_init(MachineState *machine)
         numa_cpu_pre_plug(&possible_cpus->cpus[cs->cpu_index], DEVICE(cpuobj),
                           &error_fatal);
 
-        aarch64 &= object_property_get_bool(cpuobj, "aarch64", NULL);
-
         if (!vms->secure) {
             object_property_set_bool(cpuobj, "has_el3", false, NULL);
         }
@@ -1645,10 +1456,6 @@ static void machvirt_init(MachineState *machine)
         create_secure_ram(vms, secure_sysmem, NULL);
         create_uart(vms, VIRT_SECURE_UART, secure_sysmem, serial_hd(1));
     }
-
-    vms->highmem_ecam &= (!firmware_loaded || aarch64);
-
-    create_pcie(vms);
 
     create_gpio_devices(vms, VIRT_GPIO, sysmem);
 
@@ -1853,7 +1660,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
 static void virt_instance_init(Object *obj)
 {
     HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-    HobotVirtMachineClass *vmc = VIRT_MACHINE_GET_CLASS(vms);
 
     /* EL3 is disabled by default on virt: this makes us consistent
      * between KVM and TCG for this board, and it also allows us to
@@ -1867,8 +1673,6 @@ static void virt_instance_init(Object *obj)
     /* High memory is enabled by default */
     vms->highmem = true;
 
-    vms->highmem_ecam = !vmc->no_highmem_ecam;
-    vms->highmem_mmio = true;
     vms->highmem_redists = true;
 
     /* Supply kaslr-seed and rng-seed by default */
