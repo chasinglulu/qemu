@@ -145,14 +145,13 @@ static MemMapEntry extended_memmap[] = {
     [VIRT_HIGH_PCIE_MMIO] =     { 0x0, 512 * GiB },
 };
 
-static const int a15irqmap[] = {
+static const int a78irqmap[] = {
     [VIRT_UART] = 1,
     [VIRT_RTC] = 2,
     [VIRT_PCIE] = 3, /* ... to 6 */
     [VIRT_GPIO] = 7,
     [VIRT_SECURE_UART] = 8,
     [VIRT_MMIO] = 16, /* ...to 16 + NUM_VIRTIO_TRANSPORTS - 1 */
-    [VIRT_PLATFORM_BUS] = 112, /* ...to 112 + PLATFORM_BUS_NUM_IRQS -1 */
 };
 
 static void create_randomness(MachineState *ms, const char *node)
@@ -1225,31 +1224,6 @@ static void create_pcie(HobotVirtMachineState *vms)
     create_pcie_irq_map(ms, vms->gic_phandle, irq, nodename);
 }
 
-static void create_platform_bus(HobotVirtMachineState *vms)
-{
-    DeviceState *dev;
-    SysBusDevice *s;
-    int i;
-    MemoryRegion *sysmem = get_system_memory();
-
-    dev = qdev_new(TYPE_PLATFORM_BUS_DEVICE);
-    dev->id = g_strdup(TYPE_PLATFORM_BUS_DEVICE);
-    qdev_prop_set_uint32(dev, "num_irqs", PLATFORM_BUS_NUM_IRQS);
-    qdev_prop_set_uint32(dev, "mmio_size", vms->memmap[VIRT_PLATFORM_BUS].size);
-    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
-    vms->platform_bus_dev = dev;
-
-    s = SYS_BUS_DEVICE(dev);
-    for (i = 0; i < PLATFORM_BUS_NUM_IRQS; i++) {
-        int irq = vms->irqmap[VIRT_PLATFORM_BUS] + i;
-        sysbus_connect_irq(s, i, qdev_get_gpio_in(vms->gic, irq));
-    }
-
-    memory_region_add_subregion(sysmem,
-                                vms->memmap[VIRT_PLATFORM_BUS].base,
-                                sysbus_mmio_get_region(s, 0));
-}
-
 static void create_secure_ram(HobotVirtMachineState *vms,
                               MemoryRegion *secure_sysmem,
                               MemoryRegion *secure_tag_sysmem)
@@ -1659,8 +1633,6 @@ static void machvirt_init(MachineState *machine)
     vms->fw_cfg = create_fw_cfg(vms, &address_space_memory);
     rom_set_fw(vms->fw_cfg);
 
-    create_platform_bus(vms);
-
     vms->bootinfo.ram_size = machine->ram_size;
     vms->bootinfo.board_id = -1;
     vms->bootinfo.loader_start = vms->memmap[VIRT_MEM].base;
@@ -1866,7 +1838,7 @@ static void virt_instance_init(Object *obj)
     /* Supply kaslr-seed and rng-seed by default */
     vms->dtb_randomness = true;
 
-    vms->irqmap = a15irqmap;
+    vms->irqmap = a78irqmap;
 
     virt_flash_create(vms);
 }

@@ -111,7 +111,6 @@ struct HobotVirtMachineClass {
 struct HobotVirtMachineState {
     MachineState parent;
     Notifier machine_done;
-    DeviceState *platform_bus_dev;
     FWCfgState *fw_cfg;
     PFlashCFI01 *flash[2];
     bool secure;
