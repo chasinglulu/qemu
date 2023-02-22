@@ -104,7 +104,6 @@ struct HobotVirtMachineClass {
 struct HobotVirtMachineState {
     MachineState parent;
     Notifier machine_done;
-    FWCfgState *fw_cfg;
     PFlashCFI01 *flash[2];
     bool secure;
     bool highmem;

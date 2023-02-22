@@ -1067,28 +1067,6 @@ static bool virt_firmware_init(HobotVirtMachineState *vms,
     return pflash_blk0 || bios_name;
 }
 
-static FWCfgState *create_fw_cfg(const HobotVirtMachineState *vms, AddressSpace *as)
-{
-    MachineState *ms = MACHINE(vms);
-    hwaddr base = vms->memmap[VIRT_FW_CFG].base;
-    hwaddr size = vms->memmap[VIRT_FW_CFG].size;
-    FWCfgState *fw_cfg;
-    char *nodename;
-
-    fw_cfg = fw_cfg_init_mem_wide(base + 8, base, 8, base + 16, as);
-    fw_cfg_add_i16(fw_cfg, FW_CFG_NB_CPUS, (uint16_t)ms->smp.cpus);
-
-    nodename = g_strdup_printf("/fw-cfg@%" PRIx64, base);
-    qemu_fdt_add_subnode(ms->fdt, nodename);
-    qemu_fdt_setprop_string(ms->fdt, nodename,
-                            "compatible", "qemu,fw-cfg-mmio");
-    qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
-                                 2, base, 2, size);
-    qemu_fdt_setprop(ms->fdt, nodename, "dma-coherent", NULL, 0);
-    g_free(nodename);
-    return fw_cfg;
-}
-
 static void create_secure_ram(HobotVirtMachineState *vms,
                               MemoryRegion *secure_sysmem,
                               MemoryRegion *secure_tag_sysmem)
@@ -1137,8 +1115,6 @@ void virt_machine_done(Notifier *notifier, void *data)
     if (arm_load_dtb(info->dtb_start, info, info->dtb_limit, as, ms) < 0) {
         exit(1);
     }
-
-    fw_cfg_add_extra_pci_roots(vms->bus, vms->fw_cfg);
 }
 
 static uint64_t virt_cpu_mp_affinity(HobotVirtMachineState *vms, int idx)
@@ -1472,9 +1448,6 @@ static void machvirt_init(MachineState *machine)
      * no backend is created the transport will just sit harmlessly idle.
      */
     create_virtio_devices(vms);
-
-    vms->fw_cfg = create_fw_cfg(vms, &address_space_memory);
-    rom_set_fw(vms->fw_cfg);
 
     vms->bootinfo.ram_size = machine->ram_size;
     vms->bootinfo.board_id = -1;
