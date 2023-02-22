@@ -110,7 +110,6 @@ static const MemMapEntry base_memmap[] = {
     /* This redistributor space allows up to 2*64kB*123 CPUs */
     [VIRT_GIC_REDIST] =         { 0x080A0000, 0x00F60000 },
     [VIRT_UART] =               { 0x09000000, 0x00001000 },
-    [VIRT_RTC] =                { 0x09010000, 0x00001000 },
     [VIRT_FW_CFG] =             { 0x09020000, 0x00000018 },
     [VIRT_GPIO] =               { 0x09030000, 0x00001000 },
     [VIRT_SECURE_UART] =        { 0x09040000, 0x00001000 },
@@ -118,7 +117,6 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_SECURE_GPIO] =        { 0x090b0000, 0x00001000 },
     [VIRT_MMIO] =               { 0x0a000000, 0x00000200 },
     /* ...repeating for a total of NUM_VIRTIO_TRANSPORTS, each of that size */
-    [VIRT_PLATFORM_BUS] =       { 0x0c000000, 0x02000000 },
     [VIRT_SECURE_MEM] =         { 0x0e000000, 0x01000000 },
     [VIRT_PCIE_MMIO] =          { 0x10000000, 0x2eff0000 },
     [VIRT_PCIE_PIO] =           { 0x3eff0000, 0x00010000 },
@@ -147,7 +145,6 @@ static MemMapEntry extended_memmap[] = {
 
 static const int a78irqmap[] = {
     [VIRT_UART] = 1,
-    [VIRT_RTC] = 2,
     [VIRT_PCIE] = 3, /* ... to 6 */
     [VIRT_GPIO] = 7,
     [VIRT_SECURE_UART] = 8,
@@ -674,30 +671,6 @@ static void create_uart(const HobotVirtMachineState *vms, int uart,
                                 nodename);
     }
 
-    g_free(nodename);
-}
-
-static void create_rtc(const HobotVirtMachineState *vms)
-{
-    char *nodename;
-    hwaddr base = vms->memmap[VIRT_RTC].base;
-    hwaddr size = vms->memmap[VIRT_RTC].size;
-    int irq = vms->irqmap[VIRT_RTC];
-    const char compat[] = "arm,pl031\0arm,primecell";
-    MachineState *ms = MACHINE(vms);
-
-    sysbus_create_simple("pl031", base, qdev_get_gpio_in(vms->gic, irq));
-
-    nodename = g_strdup_printf("/pl031@%" PRIx64, base);
-    qemu_fdt_add_subnode(ms->fdt, nodename);
-    qemu_fdt_setprop(ms->fdt, nodename, "compatible", compat, sizeof(compat));
-    qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
-                                 2, base, 2, size);
-    qemu_fdt_setprop_cells(ms->fdt, nodename, "interrupts",
-                           GIC_FDT_IRQ_TYPE_SPI, irq,
-                           GIC_FDT_IRQ_FLAGS_LEVEL_HI);
-    qemu_fdt_setprop_cell(ms->fdt, nodename, "clocks", vms->clock_phandle);
-    qemu_fdt_setprop_string(ms->fdt, nodename, "clock-names", "apb_pclk");
     g_free(nodename);
 }
 
@@ -1609,8 +1582,6 @@ static void machvirt_init(MachineState *machine)
     }
 
     vms->highmem_ecam &= (!firmware_loaded || aarch64);
-
-    create_rtc(vms);
 
     create_pcie(vms);
 
