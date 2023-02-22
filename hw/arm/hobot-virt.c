@@ -77,6 +77,8 @@
 #include "hw/virtio/virtio-iommu.h"
 #include "hw/char/serial.h"
 #include "qemu/guest-random.h"
+#include "qemu/log.h"
+#include "hw/sd/cadence_sdhci.h"
 
 /* Number of external interrupt lines to configure the GIC with */
 #define NUM_IRQS 256
@@ -109,7 +111,8 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_GIC_ITS] =            { 0x08080000, 0x00020000 },
     /* This redistributor space allows up to 2*64kB*123 CPUs */
     [VIRT_GIC_REDIST] =         { 0x080A0000, 0x00F60000 },
-    [VIRT_UART] =               { 0x09000000, 0x00001000 },
+    [VIRT_UART] =               { 0x39050000, 0x00010000 },
+    [VIRT_SDHCI] =              { 0x39030000, 0x00010000 },
     [VIRT_FW_CFG] =             { 0x09020000, 0x00000018 },
     [VIRT_GPIO] =               { 0x09030000, 0x00001000 },
     [VIRT_SECURE_UART] =        { 0x09040000, 0x00001000 },
@@ -118,11 +121,11 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_MMIO] =               { 0x0a000000, 0x00000200 },
     /* ...repeating for a total of NUM_VIRTIO_TRANSPORTS, each of that size */
     [VIRT_SECURE_MEM] =         { 0x0e000000, 0x01000000 },
-    [VIRT_PCIE_MMIO] =          { 0x10000000, 0x2eff0000 },
-    [VIRT_PCIE_PIO] =           { 0x3eff0000, 0x00010000 },
-    [VIRT_PCIE_ECAM] =          { 0x3f000000, 0x01000000 },
+    [VIRT_PCIE_MMIO] =          { 0x40000000, 0x2eff0000 },
+    [VIRT_PCIE_PIO] =           { 0x6eff0000, 0x00010000 },
+    [VIRT_PCIE_ECAM] =          { 0x6f000000, 0x01000000 },
     /* Actual RAM size depends on initial RAM and device memory settings */
-    [VIRT_MEM] =                { GiB, LEGACY_RAMLIMIT_BYTES },
+    [VIRT_MEM] =                { 2*GiB, (254UL * GiB) },
 };
 
 /*
@@ -144,7 +147,8 @@ static MemMapEntry extended_memmap[] = {
 };
 
 static const int a78irqmap[] = {
-    [VIRT_UART] = 1,
+    [VIRT_UART] = 73,
+    [VIRT_SDHCI] = 120,
     [VIRT_PCIE] = 3, /* ... to 6 */
     [VIRT_GPIO] = 7,
     [VIRT_SECURE_UART] = 8,
@@ -616,6 +620,60 @@ static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
     fdt_add_gic_node(vms);
 
     //create_its(vms);
+}
+
+static void create_sdhci(HobotVirtMachineState *vms, MemoryRegion *mem, int sdhci)
+{
+    char *nodename;
+    hwaddr base = vms->memmap[sdhci].base;
+    hwaddr size = vms->memmap[sdhci].size;
+    int irq = vms->irqmap[sdhci];
+    const char compat[] = "cdns,sd4hc";
+    DeviceState *dev = qdev_new(TYPE_CADENCE_SDHCI);
+    SysBusDevice *s = SYS_BUS_DEVICE(dev);
+    MachineState *ms = MACHINE(vms);
+
+    dev->id = g_strdup_printf("sdhci%d", 0);
+    object_property_set_uint(OBJECT(dev), "index", 0,
+                                &error_fatal);
+    object_property_set_uint(OBJECT(dev), "capareg", 0x70156ac800UL,
+                                 &error_fatal);
+
+    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+    memory_region_add_subregion(mem, base,
+                            sysbus_mmio_get_region(s, 0));
+    sysbus_connect_irq(s, 0, qdev_get_gpio_in(vms->gic, irq));
+
+    nodename = g_strdup_printf("/sdhci@%" PRIx64, base);
+    qemu_fdt_add_subnode(ms->fdt, nodename);
+    /* Note that we can't use setprop_string because of the embedded NUL */
+    qemu_fdt_setprop(ms->fdt, nodename, "compatible",
+                         compat, sizeof(compat));
+    qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
+                                     2, base, 2, size);
+    qemu_fdt_setprop_cells(ms->fdt, nodename, "interrupts",
+                               GIC_FDT_IRQ_TYPE_SPI, irq,
+                               GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+    qemu_fdt_setprop_cell(ms->fdt, nodename, "clocks", vms->clock_phandle);
+    qemu_fdt_setprop_cells(ms->fdt, nodename, "sdhci-caps-mask", 0xffffffff, 0xffffffff);
+    qemu_fdt_setprop_cells(ms->fdt, nodename, "sdhci-caps", 0x70, 0x156ac800);
+    qemu_fdt_setprop(ms->fdt, nodename, "non-removable", NULL, 0);
+    qemu_fdt_setprop_cell(ms->fdt, nodename, "reg-shift", 2);
+    qemu_fdt_setprop(ms->fdt, nodename, "no-sdio", NULL, 0);
+    qemu_fdt_setprop(ms->fdt, nodename, "no-sd", NULL, 0);
+    qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "bus-width", 1, 8);
+
+    DriveInfo *di = drive_get(IF_NONE, 0, 0);
+    BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+    DeviceState *emmc;
+
+    emmc = qdev_new(TYPE_EMMC);
+    object_property_add_child(OBJECT(dev), "emmc[*]", OBJECT(emmc));
+    object_property_set_uint(OBJECT(emmc), "spec_version", 3, &error_fatal);
+    object_property_set_uint(OBJECT(emmc), "boot-config", 0, &error_fatal);
+    qdev_prop_set_drive_err(emmc, "drive", blk, &error_fatal);
+    qdev_realize_and_unref(emmc, CADENCE_SDHCI(dev)->bus, &error_fatal);
 }
 
 static void create_uart(const HobotVirtMachineState *vms, int uart,
@@ -1319,6 +1377,8 @@ static void virt_set_memmap(HobotVirtMachineState *vms, int pa_bits)
         ROUND_UP(vms->memmap[VIRT_MEM].base + ms->ram_size, GiB);
     device_memory_size = ms->maxram_size - ms->ram_size + ms->ram_slots * GiB;
 
+    qemu_log("%s: device_memory_base = 0x%lx device_memory_size = 0x%lx\n", __func__, device_memory_base, device_memory_size);
+
     /* Base address of the high IO region */
     memtop = base = device_memory_base + ROUND_UP(device_memory_size, GiB);
     if (memtop > BIT_ULL(pa_bits)) {
@@ -1344,6 +1404,7 @@ static void virt_set_memmap(HobotVirtMachineState *vms, int pa_bits)
         base = ROUND_UP(base, size);
         vms->memmap[i].base = base;
         vms->memmap[i].size = size;
+        qemu_log("%s: index: %d, base=0x%lx, size=0x%lx\n", __func__, i, base, size);
 
         /*
          * Check each device to see if they fit in the PA space,
@@ -1437,6 +1498,8 @@ static void machvirt_init(MachineState *machine)
         pa_bits = arm_pamax(armcpu);
 
         object_unref(cpuobj);
+
+        qemu_log("%s: pa_bits: %d\n", __func__, pa_bits);
 
         virt_set_memmap(vms, pa_bits);
     }
@@ -1575,6 +1638,8 @@ static void machvirt_init(MachineState *machine)
     fdt_add_pmu_nodes(vms);
 
     create_uart(vms, VIRT_UART, sysmem, serial_hd(0));
+
+    create_sdhci(vms, sysmem, VIRT_SDHCI);
 
     if (vms->secure) {
         create_secure_ram(vms, secure_sysmem, NULL);

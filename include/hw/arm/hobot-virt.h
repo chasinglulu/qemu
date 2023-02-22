@@ -66,7 +66,7 @@ enum {
     VIRT_GIC_REDIST,
     VIRT_UART,
     VIRT_MMIO,
-    VIRT_RTC,
+    VIRT_SDHCI,
     VIRT_FW_CFG,
     VIRT_PCIE,
     VIRT_PCIE_MMIO,
