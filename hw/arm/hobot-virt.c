@@ -78,34 +78,6 @@
 #include "hw/char/serial.h"
 #include "qemu/guest-random.h"
 
-#define DEFINE_VIRT_MACHINE_LATEST(major, minor, latest) \
-    static void virt_##major##_##minor##_class_init(ObjectClass *oc, \
-                                                    void *data) \
-    { \
-        MachineClass *mc = MACHINE_CLASS(oc); \
-        virt_machine_##major##_##minor##_options(mc); \
-        mc->desc = "QEMU " # major "." # minor " ARM Virtual Machine"; \
-        if (latest) { \
-            mc->alias = "hobot-virt"; \
-        } \
-    } \
-    static const TypeInfo machvirt_##major##_##minor##_info = { \
-        .name = MACHINE_TYPE_NAME("hobot-virt-" # major "." # minor), \
-        .parent = TYPE_VIRT_MACHINE, \
-        .class_init = virt_##major##_##minor##_class_init, \
-    }; \
-    static void machvirt_machine_##major##_##minor##_init(void) \
-    { \
-        type_register_static(&machvirt_##major##_##minor##_info); \
-    } \
-    type_init(machvirt_machine_##major##_##minor##_init);
-
-#define DEFINE_VIRT_MACHINE_AS_LATEST(major, minor) \
-    DEFINE_VIRT_MACHINE_LATEST(major, minor, true)
-#define DEFINE_VIRT_MACHINE(major, minor) \
-    DEFINE_VIRT_MACHINE_LATEST(major, minor, false)
-
-
 /* Number of external interrupt lines to configure the GIC with */
 #define NUM_IRQS 256
 
@@ -1389,8 +1361,6 @@ void virt_machine_done(Notifier *notifier, void *data)
 
     fw_cfg_add_extra_pci_roots(vms->bus, vms->fw_cfg);
 
-    //virt_acpi_setup(vms);
-    //virt_build_smbios(vms);
 }
 
 static uint64_t virt_cpu_mp_affinity(HobotVirtMachineState *vms, int idx)
@@ -1877,6 +1847,7 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
 
+    mc->desc = "Hobot ARM QEMU Virtual Machine";
     mc->init = machvirt_init;
     /* Start with max_cpus set to 512, which is the maximum supported by KVM.
      * The value may be reduced later when we have more information about the
@@ -1962,15 +1933,10 @@ static void virt_instance_init(Object *obj)
 static const TypeInfo virt_machine_info = {
     .name          = TYPE_VIRT_MACHINE,
     .parent        = TYPE_MACHINE,
-    .abstract      = true,
     .instance_size = sizeof(HobotVirtMachineState),
     .class_size    = sizeof(HobotVirtMachineClass),
     .class_init    = virt_machine_class_init,
     .instance_init = virt_instance_init,
-    .interfaces = (InterfaceInfo[]) {
-         { TYPE_HOTPLUG_HANDLER },
-         { }
-    },
 };
 
 static void machvirt_machine_init(void)
@@ -1978,8 +1944,3 @@ static void machvirt_machine_init(void)
     type_register_static(&virt_machine_info);
 }
 type_init(machvirt_machine_init);
-
-static void virt_machine_7_1_options(MachineClass *mc)
-{
-}
-DEFINE_VIRT_MACHINE_AS_LATEST(7, 1)

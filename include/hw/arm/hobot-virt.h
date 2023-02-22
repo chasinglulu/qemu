@@ -107,7 +107,6 @@ struct HobotVirtMachineClass {
     bool no_highmem_ecam;
     bool kvm_no_adjvtime;
     bool no_kvm_steal_time;
-    bool acpi_expose_flash;
     bool no_secure_gpio;
     /* Machines < 6.2 have no support for describing cpu topology to guest */
     bool no_cpu_topology;
@@ -136,7 +135,6 @@ struct HobotVirtMachineState {
     uint32_t clock_phandle;
     uint32_t gic_phandle;
     uint32_t msi_phandle;
-    uint32_t iommu_phandle;
     int psci_conduit;
     hwaddr highest_gpa;
     DeviceState *gic;
