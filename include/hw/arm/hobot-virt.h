@@ -93,12 +93,6 @@ enum {
     VIRT_HIGH_PCIE_MMIO,
 };
 
-typedef enum HobotVirtIOMMUType {
-    VIRT_IOMMU_NONE,
-    VIRT_IOMMU_SMMUV3,
-    VIRT_IOMMU_VIRTIO,
-} HobotVirtIOMMUType;
-
 typedef enum HobotVirtMSIControllerType {
     VIRT_MSI_CTRL_NONE,
     VIRT_MSI_CTRL_GICV2M,
@@ -110,7 +104,6 @@ struct HobotVirtMachineClass {
     bool disallow_affinity_adjustment;
     bool no_pmu;
     bool claim_edge_triggered_timers;
-    bool smbios_old_sys_ver;
     bool no_highmem_ecam;
     bool kvm_no_adjvtime;
     bool no_kvm_steal_time;
@@ -134,7 +127,6 @@ struct HobotVirtMachineState {
     bool highmem_redists;
     bool virt;
     bool dtb_randomness;
-    HobotVirtIOMMUType iommu;
     HobotVirtMSIControllerType msi_controller;
     struct arm_boot_info bootinfo;
     MemMapEntry *memmap;

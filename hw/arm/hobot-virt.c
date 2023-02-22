@@ -1164,58 +1164,6 @@ static void create_pcie_irq_map(const MachineState *ms,
                            0x7           /* PCI irq */);
 }
 
-static void create_smmu(const HobotVirtMachineState *vms,
-                        PCIBus *bus)
-{
-    char *node;
-    const char compat[] = "arm,smmu-v3";
-    int irq =  vms->irqmap[VIRT_SMMU];
-    int i;
-    hwaddr base = vms->memmap[VIRT_SMMU].base;
-    hwaddr size = vms->memmap[VIRT_SMMU].size;
-    const char irq_names[] = "eventq\0priq\0cmdq-sync\0gerror";
-    DeviceState *dev;
-    MachineState *ms = MACHINE(vms);
-
-    if (vms->iommu != VIRT_IOMMU_SMMUV3 || !vms->iommu_phandle) {
-        return;
-    }
-
-    dev = qdev_new("arm-smmuv3");
-
-    object_property_set_link(OBJECT(dev), "primary-bus", OBJECT(bus),
-                             &error_abort);
-    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
-    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, base);
-    for (i = 0; i < NUM_SMMU_IRQS; i++) {
-        sysbus_connect_irq(SYS_BUS_DEVICE(dev), i,
-                           qdev_get_gpio_in(vms->gic, irq + i));
-    }
-
-    node = g_strdup_printf("/smmuv3@%" PRIx64, base);
-    qemu_fdt_add_subnode(ms->fdt, node);
-    qemu_fdt_setprop(ms->fdt, node, "compatible", compat, sizeof(compat));
-    qemu_fdt_setprop_sized_cells(ms->fdt, node, "reg", 2, base, 2, size);
-
-    qemu_fdt_setprop_cells(ms->fdt, node, "interrupts",
-            GIC_FDT_IRQ_TYPE_SPI, irq    , GIC_FDT_IRQ_FLAGS_EDGE_LO_HI,
-            GIC_FDT_IRQ_TYPE_SPI, irq + 1, GIC_FDT_IRQ_FLAGS_EDGE_LO_HI,
-            GIC_FDT_IRQ_TYPE_SPI, irq + 2, GIC_FDT_IRQ_FLAGS_EDGE_LO_HI,
-            GIC_FDT_IRQ_TYPE_SPI, irq + 3, GIC_FDT_IRQ_FLAGS_EDGE_LO_HI);
-
-    qemu_fdt_setprop(ms->fdt, node, "interrupt-names", irq_names,
-                     sizeof(irq_names));
-
-    qemu_fdt_setprop_cell(ms->fdt, node, "clocks", vms->clock_phandle);
-    qemu_fdt_setprop_string(ms->fdt, node, "clock-names", "apb_pclk");
-    qemu_fdt_setprop(ms->fdt, node, "dma-coherent", NULL, 0);
-
-    qemu_fdt_setprop_cell(ms->fdt, node, "#iommu-cells", 1);
-
-    qemu_fdt_setprop_cell(ms->fdt, node, "phandle", vms->iommu_phandle);
-    g_free(node);
-}
-
 static void create_pcie(HobotVirtMachineState *vms)
 {
     hwaddr base_mmio = vms->memmap[VIRT_PCIE_MMIO].base;
@@ -1336,20 +1284,6 @@ static void create_pcie(HobotVirtMachineState *vms)
 
     qemu_fdt_setprop_cell(ms->fdt, nodename, "#interrupt-cells", 1);
     create_pcie_irq_map(ms, vms->gic_phandle, irq, nodename);
-
-    if (vms->iommu) {
-        vms->iommu_phandle = qemu_fdt_alloc_phandle(ms->fdt);
-
-        switch (vms->iommu) {
-        case VIRT_IOMMU_SMMUV3:
-            create_smmu(vms, vms->bus);
-            qemu_fdt_setprop_cells(ms->fdt, nodename, "iommu-map",
-                                   0x0, vms->iommu_phandle, 0x0, 0x10000);
-            break;
-        default:
-            g_assert_not_reached();
-        }
-    }
 }
 
 static void create_platform_bus(HobotVirtMachineState *vms)
@@ -1885,34 +1819,6 @@ static void virt_set_dtb_randomness(Object *obj, bool value, Error **errp)
     vms->dtb_randomness = value;
 }
 
-static char *virt_get_iommu(Object *obj, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    switch (vms->iommu) {
-    case VIRT_IOMMU_NONE:
-        return g_strdup("none");
-    case VIRT_IOMMU_SMMUV3:
-        return g_strdup("smmuv3");
-    default:
-        g_assert_not_reached();
-    }
-}
-
-static void virt_set_iommu(Object *obj, const char *value, Error **errp)
-{
-    HobotVirtMachineState *vms = VIRT_MACHINE(obj);
-
-    if (!strcmp(value, "smmuv3")) {
-        vms->iommu = VIRT_IOMMU_SMMUV3;
-    } else if (!strcmp(value, "none")) {
-        vms->iommu = VIRT_IOMMU_NONE;
-    } else {
-        error_setg(errp, "Invalid iommu value");
-        error_append_hint(errp, "Valid values are none, smmuv3.\n");
-    }
-}
-
 static CpuInstanceProperties
 virt_cpu_index_to_props(MachineState *ms, unsigned cpu_index)
 {
@@ -2010,11 +1916,6 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
                                           "Set on/off to enable/disable using "
                                           "physical address space above 32 bits");
 
-    object_class_property_add_str(oc, "iommu", virt_get_iommu, virt_set_iommu);
-    object_class_property_set_description(oc, "iommu",
-                                          "Set the IOMMU type. "
-                                          "Valid values are none and smmuv3");
-
     object_class_property_add_bool(oc, "dtb-randomness",
                                    virt_get_dtb_randomness,
                                    virt_set_dtb_randomness);
@@ -2049,9 +1950,6 @@ static void virt_instance_init(Object *obj)
     vms->highmem_ecam = !vmc->no_highmem_ecam;
     vms->highmem_mmio = true;
     vms->highmem_redists = true;
-
-    /* Default disallows iommu instantiation */
-    vms->iommu = VIRT_IOMMU_NONE;
 
     /* Supply kaslr-seed and rng-seed by default */
     vms->dtb_randomness = true;
