@@ -105,9 +105,6 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_CPUPERIPHS] =         { 0x08000000, 0x00020000 },
     /* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
     [VIRT_GIC_DIST] =           { 0x08000000, 0x00010000 },
-    [VIRT_GIC_CPU] =            { 0x08010000, 0x00010000 },
-    [VIRT_GIC_HYP] =            { 0x08030000, 0x00010000 },
-    [VIRT_GIC_VCPU] =           { 0x08040000, 0x00010000 },
     /* The space in between here is reserved for GICv3 CPU/vCPU/HYP */
     [VIRT_GIC_ITS] =            { 0x08080000, 0x00020000 },
     /* This redistributor space allows up to 2*64kB*123 CPUs */
@@ -405,6 +402,7 @@ static void fdt_add_cpu_nodes(const HobotVirtMachineState *vms)
     }
 }
 
+#if 0
 static void fdt_add_its_gic_node(HobotVirtMachineState *vms)
 {
     char *nodename;
@@ -423,6 +421,7 @@ static void fdt_add_its_gic_node(HobotVirtMachineState *vms)
     qemu_fdt_setprop_cell(ms->fdt, nodename, "phandle", vms->msi_phandle);
     g_free(nodename);
 }
+#endif
 
 static void fdt_add_gic_node(HobotVirtMachineState *vms)
 {
@@ -495,6 +494,7 @@ static void fdt_add_pmu_nodes(const HobotVirtMachineState *vms)
     }
 }
 
+#if 0
 static void create_its(HobotVirtMachineState *vms)
 {
     const char *itsclass = its_class_name();
@@ -519,6 +519,7 @@ static void create_its(HobotVirtMachineState *vms)
     fdt_add_its_gic_node(vms);
     vms->msi_controller = VIRT_MSI_CTRL_ITS;
 }
+#endif
 
 static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
 {
@@ -618,7 +619,7 @@ static void create_gic(HobotVirtMachineState *vms, MemoryRegion *mem)
 
     fdt_add_gic_node(vms);
 
-    create_its(vms);
+    //create_its(vms);
 }
 
 static void create_uart(const HobotVirtMachineState *vms, int uart,
