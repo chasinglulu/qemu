@@ -1250,16 +1250,6 @@ static void create_platform_bus(HobotVirtMachineState *vms)
                                 sysbus_mmio_get_region(s, 0));
 }
 
-static void create_tag_ram(MemoryRegion *tag_sysmem,
-                           hwaddr base, hwaddr size,
-                           const char *name)
-{
-    MemoryRegion *tagram = g_new(MemoryRegion, 1);
-
-    memory_region_init_ram(tagram, NULL, name, size / 32, &error_fatal);
-    memory_region_add_subregion(tag_sysmem, base / 32, tagram);
-}
-
 static void create_secure_ram(HobotVirtMachineState *vms,
                               MemoryRegion *secure_sysmem,
                               MemoryRegion *secure_tag_sysmem)
@@ -1280,10 +1270,6 @@ static void create_secure_ram(HobotVirtMachineState *vms,
     qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg", 2, base, 2, size);
     qemu_fdt_setprop_string(ms->fdt, nodename, "status", "disabled");
     qemu_fdt_setprop_string(ms->fdt, nodename, "secure-status", "okay");
-
-    if (secure_tag_sysmem) {
-        create_tag_ram(secure_tag_sysmem, base, size, "mach-virt.secure-tag");
-    }
 
     g_free(nodename);
 }
@@ -1476,8 +1462,6 @@ static void machvirt_init(MachineState *machine)
     const CPUArchIdList *possible_cpus;
     MemoryRegion *sysmem = get_system_memory();
     MemoryRegion *secure_sysmem = NULL;
-    MemoryRegion *tag_sysmem = NULL;
-    MemoryRegion *secure_tag_sysmem = NULL;
     int n, virt_max_cpus;
     bool firmware_loaded;
     bool aarch64 = true;
@@ -1646,13 +1630,8 @@ static void machvirt_init(MachineState *machine)
     create_uart(vms, VIRT_UART, sysmem, serial_hd(0));
 
     if (vms->secure) {
-        create_secure_ram(vms, secure_sysmem, secure_tag_sysmem);
+        create_secure_ram(vms, secure_sysmem, NULL);
         create_uart(vms, VIRT_SECURE_UART, secure_sysmem, serial_hd(1));
-    }
-
-    if (tag_sysmem) {
-        create_tag_ram(tag_sysmem, vms->memmap[VIRT_MEM].base,
-                       machine->ram_size, "mach-virt.tag");
     }
 
     vms->highmem_ecam &= (!firmware_loaded || aarch64);
