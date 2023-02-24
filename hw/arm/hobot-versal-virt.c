@@ -319,6 +319,58 @@ static void fdt_add_aliases_nodes(HobotVersalVirt *vms)
     }
 }
 
+static void fdt_add_gpio_nodes(const HobotVersalVirt *vms, int gpio)
+{
+    char *nodename, *portname, *bankname;
+    hwaddr base = base_memmap[gpio].base;
+    hwaddr size = base_memmap[gpio].size;
+    int irq = a78irqmap[gpio];
+    const char compat[] = "snps,dw-apb-gpio";
+    const char port_compat[] = "snps,dw-apb-gpio-port";
+    int i, j;
+
+    for (i = 0; i < ARRAY_SIZE(vms->soc.apu.peri.gpio); i++) {
+        nodename = g_strdup_printf("/gpio@%" PRIx64, base);
+        qemu_fdt_add_subnode(vms->fdt, nodename);
+        qemu_fdt_setprop(vms->fdt, nodename, "compatible",
+                            compat, sizeof(compat));
+        qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
+                                        2, base, 2, size);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "#address-cells", 1);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "#size-cells", 0);
+
+        /* 4 port bank per gpio controller */
+        for (j = 0; j < 4; j++) {
+            portname = g_strdup_printf("/gpio@%" PRIx64 "/port@%d", base, j);
+            bankname = g_strdup_printf("gpio%d_%c", i, 'a' + j);
+            qemu_fdt_add_path(vms->fdt, portname);
+            qemu_fdt_setprop(vms->fdt, portname, "compatible",
+                                port_compat, sizeof(port_compat));
+            qemu_fdt_setprop(vms->fdt, portname, "gpio-controller", NULL, 0);
+            qemu_fdt_setprop_cell(vms->fdt, portname, "#gpio-cells", 2);
+            qemu_fdt_setprop_cell(vms->fdt, portname, "snps,nr-gpios", 32);
+            qemu_fdt_setprop_sized_cells(vms->fdt, portname, "reg",1, j);
+            qemu_fdt_setprop_string(vms->fdt, portname, "bank-name", bankname);
+
+            /* GPIO port A as interrupt */
+            if (j == 0) {
+                qemu_fdt_setprop(vms->fdt, portname, "interrupt-controller", NULL, 0);
+                qemu_fdt_setprop_cell(vms->fdt, portname, "#interrupt-cells", 2);
+                qemu_fdt_setprop_cells(vms->fdt, portname, "interrupts",
+                                            GIC_FDT_IRQ_TYPE_SPI, irq,
+                                            GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+            }
+
+            g_free(bankname);
+            g_free(portname);
+        }
+
+        base += size;
+        irq++;
+        g_free(nodename);
+    }
+}
+
 static void fdt_add_uart_nodes(const HobotVersalVirt *vms, int uart)
 {
     char *nodename;
@@ -408,6 +460,7 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     fdt_add_gic_node(vms);
     fdt_add_timer_nodes(vms);
     fdt_add_uart_nodes(vms, VIRT_UART);
+    fdt_add_gpio_nodes(vms, VIRT_GPIO);
     fdt_add_aliases_nodes(vms);
 
     vms->bootinfo.ram_size = machine->ram_size;
