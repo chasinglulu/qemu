@@ -50,7 +50,6 @@ static void create_uart(SigiVirt *s, int uart)
         char *name = g_strdup_printf("uart%d", i);
         DeviceState *dev;
         MemoryRegion *mr;
-        irq += i;
 
         object_initialize_child(OBJECT(s), name, &s->apu.peri.uarts[i],
                                 TYPE_SERIAL_MM);
@@ -62,9 +61,12 @@ static void create_uart(SigiVirt *s, int uart)
         sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
         mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
-        memory_region_add_subregion(sysmem, base + i * size, mr);
+        memory_region_add_subregion(sysmem, base, mr);
 
         sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+
+        base += size;
+        irq += 1;
         g_free(name);
     }
 }

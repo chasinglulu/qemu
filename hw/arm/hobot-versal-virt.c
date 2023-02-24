@@ -299,9 +299,30 @@ static void fdt_add_clk_nodes(HobotVersalVirt *vms)
     qemu_fdt_setprop_cell(vms->fdt, "/apb-pclk", "phandle", vms->clock_phandle);
 }
 
+static void fdt_add_aliases_nodes(HobotVersalVirt *vms)
+{
+    int i;
+    hwaddr base = base_memmap[VIRT_UART].base;
+    hwaddr size = base_memmap[VIRT_UART].size;
+    qemu_fdt_add_subnode(vms->fdt, "/aliases");
+    char *nodename, *propname;
+
+    for (i = 0; i < ARRAY_SIZE(vms->soc.apu.peri.uarts); i++) {
+        nodename = g_strdup_printf("/serial@%" PRIx64, base);
+        propname = g_strdup_printf("serial%d", i);
+        qemu_fdt_setprop_string(vms->fdt, "/aliases", propname, nodename);
+
+        base += size;
+
+        g_free(nodename);
+        g_free(propname);
+    }
+}
+
 static void fdt_add_uart_nodes(const HobotVersalVirt *vms, int uart)
 {
     char *nodename;
+    uint32_t nr_uart = ARRAY_SIZE(vms->soc.apu.peri.uarts);
     hwaddr base = base_memmap[uart].base;
     hwaddr size = base_memmap[uart].size;
     int irq = a78irqmap[uart];
@@ -309,9 +330,10 @@ static void fdt_add_uart_nodes(const HobotVersalVirt *vms, int uart)
     const char clocknames[] = "apb_pclk";
     int i;
 
-    for (i = 0; i < ARRAY_SIZE(vms->soc.apu.peri.uarts); i++) {
-        base = base + i * size;
-        irq += i;
+    /* Create nodes in incremental address */
+    base = base + size * (nr_uart - 1);
+    irq = irq + nr_uart - 1;
+    for (i = nr_uart - 1; i >= 0; i--) {
         nodename = g_strdup_printf("/serial@%" PRIx64, base);
         qemu_fdt_add_subnode(vms->fdt, nodename);
         /* Note that we can't use setprop_string because of the embedded NUL */
@@ -330,14 +352,15 @@ static void fdt_add_uart_nodes(const HobotVersalVirt *vms, int uart)
                                    vms->clock_phandle);
         qemu_fdt_setprop(vms->fdt, nodename, "clock-names",
                              clocknames, sizeof(clocknames));
-
+        base -= size;
+        irq -= 1;
         if (i == 0) {
             /* Select UART0 as console  */
             qemu_fdt_setprop_string(vms->fdt, "/chosen", "stdout-path", nodename);
         }
-    }
 
-    g_free(nodename);
+        g_free(nodename);
+    }
 }
 
 static void *hobot_versal_virt_dtb(const struct arm_boot_info *binfo, int *fdt_size)
@@ -385,6 +408,7 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     fdt_add_gic_node(vms);
     fdt_add_timer_nodes(vms);
     fdt_add_uart_nodes(vms, VIRT_UART);
+    fdt_add_aliases_nodes(vms);
 
     vms->bootinfo.ram_size = machine->ram_size;
     vms->bootinfo.board_id = -1;
