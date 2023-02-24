@@ -46,6 +46,12 @@ struct HobotVersalVirt {
     uint32_t gic_phandle;
     int psci_conduit;
     struct arm_boot_info bootinfo;
+
+    struct {
+        bool virt;
+        bool secure;
+        bool has_emmc;
+    } cfg;
 };
 
 static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
@@ -108,6 +114,23 @@ static void create_fdt(HobotVersalVirt *s)
     qemu_fdt_setprop_cell(s->fdt, "/", "#address-cells", 0x2);
     qemu_fdt_setprop_string(s->fdt, "/", "model", mc->desc);
     qemu_fdt_setprop_string(s->fdt, "/", "compatible", "hobot-versal-virt");
+}
+
+static void fdt_add_timer_nodes(const HobotVersalVirt *vms)
+{
+    uint32_t irqflags = GIC_FDT_IRQ_FLAGS_LEVEL_HI;
+    const char compat[] = "arm,armv8-timer";
+
+    qemu_fdt_add_subnode(vms->fdt, "/timer");
+    qemu_fdt_setprop(vms->fdt, "/timer", "compatible",
+                        compat, sizeof(compat));
+
+    qemu_fdt_setprop(vms->fdt, "/timer", "always-on", NULL, 0);
+    qemu_fdt_setprop_cells(vms->fdt, "/timer", "interrupts",
+                       GIC_FDT_IRQ_TYPE_PPI, ARCH_TIMER_S_EL1_IRQ, irqflags,
+                       GIC_FDT_IRQ_TYPE_PPI, ARCH_TIMER_NS_EL1_IRQ, irqflags,
+                       GIC_FDT_IRQ_TYPE_PPI, ARCH_TIMER_VIRT_IRQ, irqflags,
+                       GIC_FDT_IRQ_TYPE_PPI, ARCH_TIMER_NS_EL2_IRQ, irqflags);
 }
 
 static void fdt_add_cpu_nodes(const HobotVersalVirt *vms)
@@ -225,6 +248,41 @@ static void fdt_add_cpu_nodes(const HobotVersalVirt *vms)
     }
 }
 
+static void fdt_add_gic_node(HobotVersalVirt *vms)
+{
+    char *nodename;
+
+    vms->gic_phandle = qemu_fdt_alloc_phandle(vms->fdt);
+    qemu_fdt_setprop_cell(vms->fdt, "/", "interrupt-parent", vms->gic_phandle);
+
+    nodename = g_strdup_printf("/gic@%" PRIx64,
+                               base_memmap[VIRT_GIC_DIST].base);
+    qemu_fdt_add_subnode(vms->fdt, nodename);
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "#interrupt-cells", 3);
+    qemu_fdt_setprop(vms->fdt, nodename, "interrupt-controller", NULL, 0);
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "#address-cells", 0x2);
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "#size-cells", 0x2);
+    qemu_fdt_setprop(vms->fdt, nodename, "ranges", NULL, 0);
+    qemu_fdt_setprop_string(vms->fdt, nodename, "compatible",
+                            "arm,gic-v3");
+    qemu_fdt_setprop_cell(vms->fdt, nodename,
+                            "#redistributor-regions", 1);
+    qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
+                                    2, base_memmap[VIRT_GIC_DIST].base,
+                                    2, base_memmap[VIRT_GIC_DIST].size,
+                                    2, base_memmap[VIRT_GIC_REDIST].base,
+                                    2, base_memmap[VIRT_GIC_REDIST].size);
+
+    if (vms->cfg.virt) {
+        qemu_fdt_setprop_cells(vms->fdt, nodename, "interrupts",
+                                GIC_FDT_IRQ_TYPE_PPI, ARCH_GIC_MAINT_IRQ,
+                                GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+    }
+
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "phandle", vms->gic_phandle);
+    g_free(nodename);
+}
+
 static void fdt_add_clk_nodes(HobotVersalVirt *vms)
 {
     /* Clock node, for the benefit of the UART. The kernel device tree
@@ -324,6 +382,8 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     create_fdt(vms);
     fdt_add_clk_nodes(vms);
     fdt_add_cpu_nodes(vms);
+    fdt_add_gic_node(vms);
+    fdt_add_timer_nodes(vms);
     fdt_add_uart_nodes(vms, VIRT_UART);
 
     vms->bootinfo.ram_size = machine->ram_size;

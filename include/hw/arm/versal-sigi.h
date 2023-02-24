@@ -65,15 +65,14 @@ enum {
 };
 
 static const MemMapEntry base_memmap[] = {
+    [VIRT_GIC_ITS] =            { 0x30290000, 0x00010000 },
     /* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
     [VIRT_GIC_DIST] =           { 0x30B00000, 0x00010000 },
-    /* The space in between here is reserved for GICv3 CPU/vCPU/HYP */
-    [VIRT_GIC_ITS] =            { 0x30290000, 0x00010000 },
-    /* This redistributor space allows up to 2 * 64kB * 4 CPUs */
-    [VIRT_GIC_REDIST] =         { 0x30B60000, 0x00080000 },
+    /* This redistributor space allows up to 2 * 64kB * 14 CPUs */
+    [VIRT_GIC_REDIST] =         { 0x30B60000, 0x001C0000 },
+    [VIRT_SDHCI] =              { 0x39030000, 0x00010000 },
     [VIRT_UART] =               { 0x39050000, 0x00010000 },
     /* ...repeating for a total of SIGI_VIRT_NR_UARTS, each of that size */
-    [VIRT_SDHCI] =              { 0x39030000, 0x00010000 },
     [VIRT_MEM] =                { 0x3000000000UL, 16UL * GiB },
 };
 
