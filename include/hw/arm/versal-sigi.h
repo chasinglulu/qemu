@@ -31,6 +31,7 @@
 #include "qemu/log.h"
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
+#include "hw/gpio/dwapb_gpio.h"
 
 #define TYPE_SIGI_VIRT "sigi-virt"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
@@ -40,6 +41,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
 #define SIGI_VIRT_NR_RCPUS      4
 #define SIGI_VIRT_NR_UARTS      4
 #define SIGI_VIRT_NR_SDHCI      2
+#define SIGI_VIRT_NR_GPIO       2
 #define SIGI_VIRT_NUM_IRQS      256
 
 /* Cadence SDHCI capabilities register */
@@ -61,6 +63,7 @@ enum {
     VIRT_GIC_REDIST,
     VIRT_UART,
     VIRT_SDHCI,
+    VIRT_GPIO,
     VIRT_LOWMEMMAP_LAST,
 };
 
@@ -73,12 +76,14 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_SDHCI] =              { 0x39030000, 0x00010000 },
     [VIRT_UART] =               { 0x39050000, 0x00010000 },
     /* ...repeating for a total of SIGI_VIRT_NR_UARTS, each of that size */
+    [VIRT_GPIO] =               { 0x3A120000, 0x00010000 },
     [VIRT_MEM] =                { 0x3000000000UL, 16UL * GiB },
 };
 
 static const int a78irqmap[] = {
     [VIRT_UART] = 73,   /* ...to 73 + SIGI_VIRT_NR_UARTS - 1 */
     [VIRT_SDHCI] = 120, /* ... 122 for SDHCI1 */
+    [VIRT_GPIO] = 78, /* ...to 78 + SIGI_VIRT_NR_GPIO - 1*/
 };
 
 struct SigiVirt {
@@ -90,6 +95,7 @@ struct SigiVirt {
         struct {
             SerialMM uarts[SIGI_VIRT_NR_UARTS];
             CadenceSDHCIState mmc[SIGI_VIRT_NR_SDHCI];
+            DWAPBGPIOState gpio[SIGI_VIRT_NR_GPIO];
         } peri;
 
         ARMCPU cpus[SIGI_VIRT_NR_ACPUS];

@@ -37,6 +37,35 @@
 
 #define SIGI_VIRT_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a78ae")
 
+static void create_gpio(SigiVirt *s, int gpio)
+{
+    MemoryRegion *sysmem = get_system_memory();
+    int irq = a78irqmap[gpio];
+    hwaddr base = base_memmap[gpio].base;
+    hwaddr size = base_memmap[gpio].size;
+    DeviceState *gicdev = DEVICE(&s->apu.gic);
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(s->apu.peri.gpio); i++) {
+        DeviceState *dev;
+        MemoryRegion *mr;
+
+        object_initialize_child(OBJECT(s), "gpio[*]", &s->apu.peri.gpio[i],
+                                TYPE_DWAPB_GPIO);
+        dev = DEVICE(&s->apu.peri.gpio[i]);
+        dev->id = g_strdup_printf("gpio%d", i);
+        sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+        mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+        memory_region_add_subregion(sysmem, base, mr);
+
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+
+        base += size;
+        irq += 1;
+    }
+}
+
 static void create_uart(SigiVirt *s, int uart)
 {
     MemoryRegion *sysmem = get_system_memory();
@@ -241,6 +270,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_gic(s);
     create_uart(s, VIRT_UART);
     create_sdhci(s, VIRT_SDHCI);
+    create_gpio(s, VIRT_GPIO);
     create_ddr_memmap(s, VIRT_MEM);
 }
 
