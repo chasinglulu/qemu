@@ -249,6 +249,83 @@ static void fdt_add_cpu_nodes(const HobotVersalVirt *vms)
     }
 }
 
+static void create_pcie_irq_map(const HobotVersalVirt *vms,
+                                uint32_t gic_phandle,
+                                int first_irq, const char *nodename)
+{
+    int devfn, pin;
+    uint32_t full_irq_map[4 * 4 * 10] = { 0 };
+    uint32_t *irq_map = full_irq_map;
+
+    for (devfn = 0; devfn <= 0x18; devfn += 0x8) {
+        for (pin = 0; pin < 4; pin++) {
+            int irq_type = GIC_FDT_IRQ_TYPE_SPI;
+            int irq_nr = first_irq + ((pin + PCI_SLOT(devfn)) % PCI_NUM_PINS);
+            int irq_level = GIC_FDT_IRQ_FLAGS_LEVEL_HI;
+            int i;
+
+            uint32_t map[] = {
+                devfn << 8, 0, 0,                           /* devfn */
+                pin + 1,                                    /* PCI pin */
+                gic_phandle, 0, 0, irq_type, irq_nr, irq_level }; /* GIC irq */
+
+            /* Convert map to big endian */
+            for (i = 0; i < 10; i++) {
+                irq_map[i] = cpu_to_be32(map[i]);
+            }
+            irq_map += 10;
+        }
+    }
+
+    qemu_fdt_setprop(vms->fdt, nodename, "interrupt-map",
+                     full_irq_map, sizeof(full_irq_map));
+
+    qemu_fdt_setprop_cells(vms->fdt, nodename, "interrupt-map-mask",
+                           cpu_to_be16(PCI_DEVFN(3, 0)), /* Slot 3 */
+                           0, 0,
+                           0x7           /* PCI irq */);
+}
+
+static void fdt_add_pcie_node(HobotVersalVirt *vms, int pcie)
+{
+    char *nodename;
+    hwaddr base = base_memmap[pcie].base;
+    hwaddr size = base_memmap[pcie].size;
+    int irq = a78irqmap[pcie];
+    int nr_pcie_buses = size / PCIE_MMCFG_SIZE_MIN;
+
+    nodename = g_strdup_printf("/pcie@%" PRIx64, base);
+    qemu_fdt_add_subnode(vms->fdt, nodename);
+    qemu_fdt_setprop_string(vms->fdt, nodename,
+                            "compatible", "pci-host-ecam-generic");
+    qemu_fdt_setprop_string(vms->fdt, nodename, "device_type", "pci");
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "#address-cells", 3);
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "#size-cells", 2);
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "linux,pci-domain", 0);
+    qemu_fdt_setprop_cells(vms->fdt, nodename, "bus-range", 0,
+                           nr_pcie_buses - 1);
+    qemu_fdt_setprop(vms->fdt, nodename, "dma-coherent", NULL, 0);
+
+    if (vms->msi_phandle) {
+        qemu_fdt_setprop_cells(vms->fdt, nodename, "msi-parent",
+                               vms->msi_phandle);
+    }
+
+    qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg", 2, base, 2, size);
+
+    qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "ranges",
+                                     1, FDT_PCI_RANGE_MMIO, 2, base_memmap[VIRT_PCIE_MMIO].base,
+                                     2, base_memmap[VIRT_PCIE_MMIO].base,
+                                     2, base_memmap[VIRT_PCIE_MMIO].size,
+                                     1, FDT_PCI_RANGE_MMIO_64BIT,
+                                     2, base_memmap[VIRT_PCIE_MMIO_HIGH].base,
+                                     2, base_memmap[VIRT_PCIE_MMIO_HIGH].base,
+                                     2, base_memmap[VIRT_PCIE_MMIO_HIGH].base);
+
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "#interrupt-cells", 1);
+    create_pcie_irq_map(vms, vms->gic_phandle, irq, nodename);
+}
+
 static void fdt_add_gic_node(HobotVersalVirt *vms)
 {
     char *nodename;
@@ -482,6 +559,7 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     fdt_add_timer_nodes(vms);
     fdt_add_uart_nodes(vms, VIRT_UART);
     fdt_add_gpio_nodes(vms, VIRT_GPIO);
+    fdt_add_pcie_node(vms, VIRT_PCIE_ECAM);
     fdt_add_aliases_nodes(vms);
 
     vms->bootinfo.ram_size = machine->ram_size;
