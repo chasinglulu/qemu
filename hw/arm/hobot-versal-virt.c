@@ -225,6 +225,63 @@ static void fdt_add_cpu_nodes(const HobotVersalVirt *vms)
     }
 }
 
+static void fdt_add_clk_nodes(HobotVersalVirt *vms)
+{
+    /* Clock node, for the benefit of the UART. The kernel device tree
+     * binding documentation claims the uart node clock properties are
+     * optional.
+     */
+    vms->clock_phandle = qemu_fdt_alloc_phandle(vms->fdt);
+    qemu_fdt_add_subnode(vms->fdt, "/apb-pclk");
+    qemu_fdt_setprop_string(vms->fdt, "/apb-pclk", "compatible", "fixed-clock");
+    qemu_fdt_setprop_cell(vms->fdt, "/apb-pclk", "#clock-cells", 0x0);
+    qemu_fdt_setprop_cell(vms->fdt, "/apb-pclk", "clock-frequency", 24000000);
+    qemu_fdt_setprop_string(vms->fdt, "/apb-pclk", "clock-output-names",
+                                "clk24mhz");
+    qemu_fdt_setprop_cell(vms->fdt, "/apb-pclk", "phandle", vms->clock_phandle);
+}
+
+static void fdt_add_uart_nodes(const HobotVersalVirt *vms, int uart)
+{
+    char *nodename;
+    hwaddr base = base_memmap[uart].base;
+    hwaddr size = base_memmap[uart].size;
+    int irq = a78irqmap[uart];
+    const char compat[] = "ns16550";
+    const char clocknames[] = "apb_pclk";
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(vms->soc.apu.peri.uarts); i++) {
+        base = base + i * size;
+        irq += i;
+        nodename = g_strdup_printf("/serial@%" PRIx64, base);
+        qemu_fdt_add_subnode(vms->fdt, nodename);
+        /* Note that we can't use setprop_string because of the embedded NUL */
+        qemu_fdt_setprop(vms->fdt, nodename, "compatible",
+                            compat, sizeof(compat));
+        qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
+                                        2, base, 2, size);
+        qemu_fdt_setprop_cells(vms->fdt, nodename, "interrupts",
+                                GIC_FDT_IRQ_TYPE_SPI, irq,
+                                GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "current-speed", 115200);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "clock-frequency", 24000000);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "reg-io-width", 4);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "reg-shift", 2);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "clocks",
+                                   vms->clock_phandle);
+        qemu_fdt_setprop(vms->fdt, nodename, "clock-names",
+                             clocknames, sizeof(clocknames));
+
+        if (i == 0) {
+            /* Select UART0 as console  */
+            qemu_fdt_setprop_string(vms->fdt, "/chosen", "stdout-path", nodename);
+        }
+    }
+
+    g_free(nodename);
+}
+
 static void *hobot_versal_virt_dtb(const struct arm_boot_info *binfo, int *fdt_size)
 {
     const HobotVersalVirt *board = container_of(binfo, HobotVersalVirt,
@@ -265,7 +322,9 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->soc), &error_fatal);
 
     create_fdt(vms);
+    fdt_add_clk_nodes(vms);
     fdt_add_cpu_nodes(vms);
+    fdt_add_uart_nodes(vms, VIRT_UART);
 
     vms->bootinfo.ram_size = machine->ram_size;
     vms->bootinfo.board_id = -1;
