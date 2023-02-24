@@ -28,11 +28,14 @@
 #include "hw/char/serial.h"
 #include "hw/sd/cadence_sdhci.h"
 #include "qemu/units.h"
+#include "qemu/log.h"
 #include "exec/hwaddr.h"
+#include "target/arm/cpu.h"
 
 #define TYPE_SIGI_VIRT "sigi-virt"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
 
+#define SIGI_VIRT_CLUSTER_SIZE  4
 #define SIGI_VIRT_NR_ACPUS      4
 #define SIGI_VIRT_NR_RCPUS      4
 #define SIGI_VIRT_NR_UARTS      4
@@ -101,5 +104,13 @@ struct SigiVirt {
         MemoryRegion *mr_ddr;
     } cfg;
 };
+
+static inline uint64_t virt_cpu_mp_affinity(int idx)
+{
+    uint64_t mp_aff = arm_cpu_mp_affinity(idx, SIGI_VIRT_CLUSTER_SIZE);
+
+    mp_aff <<= 8;
+    return mp_aff;
+}
 
 #endif

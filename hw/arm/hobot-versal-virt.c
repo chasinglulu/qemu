@@ -43,9 +43,47 @@ struct HobotVersalVirt {
     void *fdt;
     int fdt_size;
     uint32_t clock_phandle;
-    uint32_t gic_phandle;;
+    uint32_t gic_phandle;
+    int psci_conduit;
     struct arm_boot_info bootinfo;
 };
+
+static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
+{
+    int n;
+    unsigned int max_cpus = ms->smp.max_cpus;
+    HobotVersalVirt *vms = HOBOT_VERSAL_VIRT_MACHINE(ms);
+    MachineClass *mc = MACHINE_GET_CLASS(vms);
+
+    if (ms->possible_cpus) {
+        assert(ms->possible_cpus->len == max_cpus);
+        return ms->possible_cpus;
+    }
+
+    ms->possible_cpus = g_malloc0(sizeof(CPUArchIdList) +
+                                  sizeof(CPUArchId) * max_cpus);
+    ms->possible_cpus->len = max_cpus;
+    for (n = 0; n < ms->possible_cpus->len; n++) {
+        ms->possible_cpus->cpus[n].type = ms->cpu_type;
+        ms->possible_cpus->cpus[n].arch_id =
+            virt_cpu_mp_affinity(n);
+
+        assert(!mc->smp_props.dies_supported);
+        ms->possible_cpus->cpus[n].props.has_socket_id = true;
+        ms->possible_cpus->cpus[n].props.socket_id =
+            n / (ms->smp.clusters * ms->smp.cores * ms->smp.threads);
+        ms->possible_cpus->cpus[n].props.has_cluster_id = true;
+        ms->possible_cpus->cpus[n].props.cluster_id =
+            (n / (ms->smp.cores * ms->smp.threads)) % ms->smp.clusters;
+        ms->possible_cpus->cpus[n].props.has_core_id = true;
+        ms->possible_cpus->cpus[n].props.core_id =
+            (n / ms->smp.threads) % ms->smp.cores;
+        ms->possible_cpus->cpus[n].props.has_thread_id = true;
+        ms->possible_cpus->cpus[n].props.thread_id =
+            n % ms->smp.threads;
+    }
+    return ms->possible_cpus;
+}
 
 static void create_fdt(HobotVersalVirt *s)
 {
@@ -70,6 +108,121 @@ static void create_fdt(HobotVersalVirt *s)
     qemu_fdt_setprop_cell(s->fdt, "/", "#address-cells", 0x2);
     qemu_fdt_setprop_string(s->fdt, "/", "model", mc->desc);
     qemu_fdt_setprop_string(s->fdt, "/", "compatible", "hobot-versal-virt");
+}
+
+static void fdt_add_cpu_nodes(const HobotVersalVirt *vms)
+{
+    int cpu;
+    int addr_cells = 1;
+    MachineState *ms = MACHINE(vms);
+    MachineClass *mc = MACHINE_GET_CLASS(ms);
+    int smp_cpus = ms->smp.cpus;
+
+    mc->possible_cpu_arch_ids(ms);
+    /*
+     * See Linux Documentation/devicetree/bindings/arm/cpus.yaml
+     * On ARM v8 64-bit systems value should be set to 2,
+     * that corresponds to the MPIDR_EL1 register size.
+     * If MPIDR_EL1[63:32] value is equal to 0 on all CPUs
+     * in the system, #address-cells can be set to 1, since
+     * MPIDR_EL1[63:32] bits are not used for CPUs
+     * identification.
+     *
+     * Here we actually don't know whether our system is 32- or 64-bit one.
+     * The simplest way to go is to examine affinity IDs of all our CPUs. If
+     * at least one of them has Aff3 populated, we set #address-cells to 2.
+     */
+    for (cpu = 0; cpu < smp_cpus; cpu++) {
+        ARMCPU *armcpu = ARM_CPU(qemu_get_cpu(cpu));
+
+        if (armcpu->mp_affinity & ARM_AFF3_MASK) {
+            addr_cells = 2;
+            break;
+        }
+    }
+
+    qemu_fdt_add_subnode(vms->fdt, "/cpus");
+
+    qemu_fdt_setprop_cell(vms->fdt, "/cpus", "#address-cells", addr_cells);
+    qemu_fdt_setprop_cell(vms->fdt, "/cpus", "#size-cells", 0x0);
+
+    for (cpu = smp_cpus - 1; cpu >= 0; cpu--) {
+        char *nodename = g_strdup_printf("/cpus/cpu@%lx", ms->possible_cpus->cpus[cpu].arch_id);
+        ARMCPU *armcpu = ARM_CPU(qemu_get_cpu(cpu));
+        CPUState *cs = CPU(armcpu);
+
+        qemu_fdt_add_subnode(vms->fdt, nodename);
+        qemu_fdt_setprop_string(vms->fdt, nodename, "device_type", "cpu");
+        qemu_fdt_setprop_string(vms->fdt, nodename, "compatible",
+                                    armcpu->dtb_compatible);
+
+        if (vms->psci_conduit != QEMU_PSCI_CONDUIT_DISABLED && smp_cpus > 1) {
+            qemu_fdt_setprop_string(vms->fdt, nodename,
+                                        "enable-method", "psci");
+        }
+
+        if (addr_cells == 2) {
+            qemu_fdt_setprop_u64(vms->fdt, nodename, "reg",
+                                 armcpu->mp_affinity);
+        } else {
+            qemu_fdt_setprop_cell(vms->fdt, nodename, "reg",
+                                  armcpu->mp_affinity);
+        }
+
+        if (ms->possible_cpus->cpus[cs->cpu_index].props.has_node_id) {
+            qemu_fdt_setprop_cell(vms->fdt, nodename, "numa-node-id",
+                ms->possible_cpus->cpus[cs->cpu_index].props.node_id);
+        }
+
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "phandle",
+                                  qemu_fdt_alloc_phandle(vms->fdt));
+
+        g_free(nodename);
+    }
+
+    /*
+     * Add vCPU topology description through fdt node cpu-map.
+     *
+     * See Linux Documentation/devicetree/bindings/cpu/cpu-topology.txt
+     * In a SMP system, the hierarchy of CPUs can be defined through
+     * four entities that are used to describe the layout of CPUs in
+     * the system: socket/cluster/core/thread.
+     *
+     * A socket node represents the boundary of system physical package
+     * and its child nodes must be one or more cluster nodes. A system
+     * can contain several layers of clustering within a single physical
+     * package and cluster nodes can be contained in parent cluster nodes.
+     *
+     * Note: currently we only support one layer of clustering within
+     * each physical package.
+    */
+    qemu_fdt_add_subnode(vms->fdt, "/cpus/cpu-map");
+
+    for (cpu = smp_cpus - 1; cpu >= 0; cpu--) {
+        char *cpu_path = g_strdup_printf("/cpus/cpu@%lx",
+                                ms->possible_cpus->cpus[cpu].arch_id);
+        char *map_path;
+
+        if (ms->smp.threads > 1) {
+            map_path = g_strdup_printf(
+                "/cpus/cpu-map/socket%d/cluster%d/core%d/thread%d",
+                cpu / (ms->smp.clusters * ms->smp.cores * ms->smp.threads),
+                (cpu / (ms->smp.cores * ms->smp.threads)) % ms->smp.clusters,
+                (cpu / ms->smp.threads) % ms->smp.cores,
+                cpu % ms->smp.threads);
+        } else {
+            map_path = g_strdup_printf(
+                "/cpus/cpu-map/socket%d/cluster%d/core%d",
+                cpu / (ms->smp.clusters * ms->smp.cores),
+                (cpu / ms->smp.cores) % ms->smp.clusters,
+                cpu % ms->smp.cores);
+        }
+        qemu_fdt_add_path(vms->fdt, map_path);
+        qemu_fdt_setprop_phandle(vms->fdt, map_path, "cpu", cpu_path);
+
+        g_free(map_path);
+        g_free(cpu_path);
+    }
 }
 
 static void *hobot_versal_virt_dtb(const struct arm_boot_info *binfo, int *fdt_size)
@@ -98,8 +251,12 @@ static void hobot_versal_virt_mach_done(Notifier *notifier, void *data)
 static void hobot_versal_virt_mach_init(MachineState *machine)
 {
     HobotVersalVirt *vms = HOBOT_VERSAL_VIRT_MACHINE(machine);
+    MachineClass *mc = MACHINE_GET_CLASS(machine);
     //MemoryRegion *sysmem = get_system_memory();
-    int psci_conduit = QEMU_PSCI_CONDUIT_SMC;
+
+    mc->possible_cpu_arch_ids(machine);
+
+    vms->psci_conduit = QEMU_PSCI_CONDUIT_SMC;
 
     object_initialize_child(OBJECT(machine), "sigi-virt", &vms->soc,
                             TYPE_SIGI_VIRT);
@@ -108,13 +265,14 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->soc), &error_fatal);
 
     create_fdt(vms);
+    fdt_add_cpu_nodes(vms);
 
     vms->bootinfo.ram_size = machine->ram_size;
     vms->bootinfo.board_id = -1;
     vms->bootinfo.loader_start = base_memmap[VIRT_MEM].base;
     vms->bootinfo.get_dtb = hobot_versal_virt_dtb;
     vms->bootinfo.skip_dtb_autoload = true;
-    vms->bootinfo.psci_conduit = psci_conduit;
+    vms->bootinfo.psci_conduit = vms->psci_conduit;
     arm_load_kernel(ARM_CPU(first_cpu), machine, &vms->bootinfo);
 
     vms->machine_done.notify = hobot_versal_virt_mach_done;
@@ -123,6 +281,13 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
 
 static void hobot_versal_virt_mach_instance_init(Object *obj)
 {
+    HobotVersalVirt *vms = HOBOT_VERSAL_VIRT_MACHINE(obj);
+    MachineState *ms = MACHINE(vms);
+
+    ms->smp.cores = SIGI_VIRT_CLUSTER_SIZE;
+    ms->smp.clusters = SIGI_VIRT_NR_ACPUS % SIGI_VIRT_CLUSTER_SIZE;
+    ms->smp.clusters = ms->smp.clusters ? SIGI_VIRT_NR_ACPUS / SIGI_VIRT_CLUSTER_SIZE + 1 :
+                                          SIGI_VIRT_NR_ACPUS / SIGI_VIRT_CLUSTER_SIZE;
 }
 
 static void hobot_versal_virt_mach_class_init(ObjectClass *oc, void *data)
@@ -134,6 +299,7 @@ static void hobot_versal_virt_mach_class_init(ObjectClass *oc, void *data)
     mc->min_cpus = SIGI_VIRT_NR_ACPUS;
     mc->max_cpus = 16;
     mc->minimum_page_bits = 12;
+    mc->possible_cpu_arch_ids = virt_possible_cpu_arch_ids;
     mc->default_cpus = SIGI_VIRT_NR_ACPUS;
     mc->no_cdrom = 1;
     mc->no_sdcard = 1;
