@@ -44,6 +44,7 @@ struct HobotVersalVirt {
     int fdt_size;
     uint32_t clock_phandle;
     uint32_t gic_phandle;
+    uint32_t msi_phandle;
     int psci_conduit;
     struct arm_boot_info bootinfo;
 
@@ -283,6 +284,25 @@ static void fdt_add_gic_node(HobotVersalVirt *vms)
     g_free(nodename);
 }
 
+static void fdt_add_gic_its_node(HobotVersalVirt *vms)
+{
+    char *nodename;
+
+    vms->msi_phandle = qemu_fdt_alloc_phandle(vms->fdt);
+    nodename = g_strdup_printf("/gic@%" PRIx64 "/its@%" PRIx64,
+                                base_memmap[VIRT_GIC_DIST].base,
+                                base_memmap[VIRT_GIC_ITS].base);
+    qemu_fdt_add_subnode(vms->fdt, nodename);
+    qemu_fdt_setprop_string(vms->fdt, nodename, "compatible",
+                            "arm,gic-v3-its");
+    qemu_fdt_setprop(vms->fdt, nodename, "msi-controller", NULL, 0);
+    qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
+                                2, base_memmap[VIRT_GIC_ITS].base,
+                                2, base_memmap[VIRT_GIC_ITS].size);
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "phandle", vms->msi_phandle);
+    g_free(nodename);
+}
+
 static void fdt_add_clk_nodes(HobotVersalVirt *vms)
 {
     /* Clock node, for the benefit of the UART. The kernel device tree
@@ -458,6 +478,7 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     fdt_add_clk_nodes(vms);
     fdt_add_cpu_nodes(vms);
     fdt_add_gic_node(vms);
+    fdt_add_gic_its_node(vms);
     fdt_add_timer_nodes(vms);
     fdt_add_uart_nodes(vms, VIRT_UART);
     fdt_add_gpio_nodes(vms, VIRT_GPIO);

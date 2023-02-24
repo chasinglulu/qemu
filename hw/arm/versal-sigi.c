@@ -133,6 +133,30 @@ static void create_sdhci(SigiVirt *s, int sdhci)
     }
 }
 
+static void create_its(SigiVirt *s)
+{
+    const char *itsclass = its_class_name();
+    DeviceState *dev;
+
+    if (strcmp(itsclass, "arm-gicv3-its")) {
+            itsclass = NULL;
+    }
+
+    if (!itsclass) {
+        /* Do nothing if not supported */
+        return;
+    }
+
+    object_initialize_child(OBJECT(s), "gic-its", &s->apu.its, itsclass);
+    dev = DEVICE(&s->apu.its);
+
+    object_property_set_link(OBJECT(dev), "parent-gicv3", OBJECT(&s->apu.gic),
+                             &error_abort);
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, base_memmap[VIRT_GIC_ITS].base);
+}
+
+
 static void create_gic(SigiVirt *s)
 {
     MemoryRegion *sysmem = get_system_memory();
@@ -204,6 +228,8 @@ static void create_gic(SigiVirt *s)
         sysbus_connect_irq(gicbusdev, i + 3 * nr_apu,
                            qdev_get_gpio_in(cpudev, ARM_CPU_VFIQ));
     }
+
+    create_its(s);
 }
 
 static void create_apu(SigiVirt *s)
