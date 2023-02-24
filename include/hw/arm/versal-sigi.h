@@ -32,6 +32,7 @@
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
 #include "hw/gpio/dwapb_gpio.h"
+#include "hw/pci-host/gpex.h"
 
 #define TYPE_SIGI_VIRT "sigi-virt"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
@@ -64,6 +65,10 @@ enum {
     VIRT_UART,
     VIRT_SDHCI,
     VIRT_GPIO,
+    VIRT_PCIE_ECAM,
+    VIRT_PCIE_PIO,
+    VIRT_PCIE_MMIO,
+    VIRT_PCIE_MMIO_HIGH,
     VIRT_LOWMEMMAP_LAST,
 };
 
@@ -73,6 +78,9 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_GIC_DIST] =           { 0x30B00000, 0x00010000 },
     /* This redistributor space allows up to 2 * 64kB * 14 CPUs */
     [VIRT_GIC_REDIST] =         { 0x30B60000, 0x001C0000 },
+    [VIRT_PCIE_ECAM] =          { 0x34000000, 0x00400000 },
+    [VIRT_PCIE_MMIO] =          { 0x80000000, 0x40000000 },
+    [VIRT_PCIE_MMIO_HIGH]=      { 0x8000000000, 0x8000000000 },
     [VIRT_SDHCI] =              { 0x39030000, 0x00010000 },
     [VIRT_UART] =               { 0x39050000, 0x00010000 },
     /* ...repeating for a total of SIGI_VIRT_NR_UARTS, each of that size */
@@ -84,6 +92,7 @@ static const int a78irqmap[] = {
     [VIRT_UART] = 73,   /* ...to 73 + SIGI_VIRT_NR_UARTS - 1 */
     [VIRT_SDHCI] = 120, /* ... 122 for SDHCI1 */
     [VIRT_GPIO] = 78, /* ...to 78 + SIGI_VIRT_NR_GPIO - 1*/
+    [VIRT_PCIE_ECAM] = 127, /* ... to 130 */
 };
 
 struct SigiVirt {
@@ -96,6 +105,7 @@ struct SigiVirt {
             SerialMM uarts[SIGI_VIRT_NR_UARTS];
             CadenceSDHCIState mmc[SIGI_VIRT_NR_SDHCI];
             DWAPBGPIOState gpio[SIGI_VIRT_NR_GPIO];
+            GPEXHost pcie;
         } peri;
 
         ARMCPU cpus[SIGI_VIRT_NR_ACPUS];
