@@ -232,6 +232,58 @@ static void create_gic(SigiVirt *s)
     create_its(s);
 }
 
+static void create_pcie(SigiVirt *s, int pcie)
+{
+    MemoryRegion *sysmem = get_system_memory();
+    DeviceState *gicdev = DEVICE(&s->apu.gic);
+    int irq = a78irqmap[pcie];
+    DeviceState *dev;
+    MemoryRegion *mmio_alias;
+    MemoryRegion *mmio_reg;
+    MemoryRegion *ecam_alias;
+    MemoryRegion *ecam_reg;
+    int i;
+
+    object_initialize_child(OBJECT(s), "pcie", &s->apu.peri.pcie,
+                                TYPE_GPEX_HOST);
+    dev = DEVICE(&s->apu.peri.pcie);
+    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+    /* Map only the first size_ecam bytes of ECAM space */
+    ecam_alias = g_new0(MemoryRegion, 1);
+    ecam_reg = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+    memory_region_init_alias(ecam_alias, OBJECT(dev), "pcie-ecam",
+                             ecam_reg, 0, base_memmap[VIRT_PCIE_ECAM].size);
+    memory_region_add_subregion(sysmem, base_memmap[VIRT_PCIE_ECAM].base,
+                                    ecam_alias);
+
+    /* Map the MMIO window into system address space so as to expose
+     * the section of PCI MMIO space which starts at the same base address
+     * (ie 1:1 mapping for that part of PCI MMIO space visible through
+     * the window).
+     */
+    mmio_alias = g_new0(MemoryRegion, 1);
+    mmio_reg = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 1);
+    memory_region_init_alias(mmio_alias, OBJECT(dev), "pcie-mmio",
+                            mmio_reg, base_memmap[VIRT_PCIE_MMIO].base,
+                            base_memmap[VIRT_PCIE_MMIO].size);
+    memory_region_add_subregion(get_system_memory(), base_memmap[VIRT_PCIE_MMIO].base, mmio_alias);
+
+    /* Map high MMIO space */
+    MemoryRegion *high_mmio_alias = g_new0(MemoryRegion, 1);
+    memory_region_init_alias(high_mmio_alias, OBJECT(dev), "pcie-mmio-high",
+                            mmio_reg, base_memmap[VIRT_PCIE_MMIO_HIGH].base,
+                            base_memmap[VIRT_PCIE_MMIO_HIGH].size);
+    memory_region_add_subregion(get_system_memory(), base_memmap[VIRT_PCIE_MMIO_HIGH].base,
+                                high_mmio_alias);
+
+    for (i = 0; i < GPEX_NUM_IRQS; i++) {
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), i,
+                           qdev_get_gpio_in(gicdev, irq + i));
+        gpex_set_irq_num(GPEX_HOST(dev), i, irq + i);
+    }
+}
+
 static void create_apu(SigiVirt *s)
 {
     MemoryRegion *sysmem = get_system_memory();
@@ -297,6 +349,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_uart(s, VIRT_UART);
     create_sdhci(s, VIRT_SDHCI);
     create_gpio(s, VIRT_GPIO);
+    create_pcie(s, VIRT_PCIE_ECAM);
     create_ddr_memmap(s, VIRT_MEM);
 }
 

@@ -20,14 +20,15 @@
 #ifndef HOBOT_SIGI_VIRT_H
 #define HOBOT_SIGI_VIRT_H
 
+#include "qemu/osdep.h"
 #include "hw/sysbus.h"
+#include "qemu/units.h"
 #include "hw/arm/boot.h"
 #include "hw/intc/arm_gicv3.h"
 #include "hw/intc/arm_gicv3_its_common.h"
 #include "qom/object.h"
 #include "hw/char/serial.h"
 #include "hw/sd/cadence_sdhci.h"
-#include "qemu/units.h"
 #include "qemu/log.h"
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
