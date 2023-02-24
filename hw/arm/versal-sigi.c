@@ -175,11 +175,6 @@ static void create_gic(SigiVirt *s)
     }
 }
 
-static inline uint64_t virt_cpu_mp_affinity(int idx)
-{
-    return arm_cpu_mp_affinity(idx, GICV3_TARGETLIST_BITS);
-}
-
 static void create_apu(SigiVirt *s)
 {
     MemoryRegion *sysmem = get_system_memory();
@@ -198,7 +193,7 @@ static void create_apu(SigiVirt *s)
         }
 
         object_property_set_int(cpuobj, "mp-affinity",
-                                virt_cpu_mp_affinity(i) * 0x100, NULL);
+                                virt_cpu_mp_affinity(i), NULL);
 
         object_property_set_bool(cpuobj, "has_el3", false, NULL);
         object_property_set_bool(cpuobj, "has_el2", false, NULL);
