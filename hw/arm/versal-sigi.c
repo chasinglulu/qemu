@@ -410,6 +410,7 @@ static void create_ddr_memmap(SigiVirt *s, int virt_mem)
 static void sigi_virt_realize(DeviceState *dev, Error **errp)
 {
     SigiVirt *s = SIGI_VIRT(dev);
+    MemoryRegion *sysmem = get_system_memory();
 
     create_apu(s);
     create_gic(s);
@@ -420,6 +421,11 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_gem(s, VIRT_GEM);
     create_usb(s, VIRT_DWC_USB);
     create_ddr_memmap(s, VIRT_MEM);
+
+    /* Create the On Chip Memory (L2SRAM).  */
+    memory_region_init_ram(&s->mr_l2sram, OBJECT(s), "l2sram",
+                           base_memmap[VIRT_L2SRAM].base, &error_fatal);
+    memory_region_add_subregion_overlap(sysmem, base_memmap[VIRT_L2SRAM].base, &s->mr_l2sram, 0);
 }
 
 static Property sigi_virt_properties[] = {
