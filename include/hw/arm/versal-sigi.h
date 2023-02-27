@@ -35,6 +35,8 @@
 #include "hw/gpio/dwapb_gpio.h"
 #include "hw/pci-host/gpex.h"
 #include "hw/net/cadence_gem.h"
+#include "hw/register.h"
+#include "hw/usb/hcd-dwc3.h"
 
 #define TYPE_SIGI_VIRT "sigi-virt"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
@@ -69,6 +71,8 @@ enum {
     VIRT_SDHCI,
     VIRT_GPIO,
     VIRT_GEM,
+    VIRT_DWC_USB,
+    VIRT_USB_CTRL,
     VIRT_PCIE_ECAM,
     VIRT_PCIE_PIO,
     VIRT_PCIE_MMIO,
@@ -90,6 +94,8 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_UART] =               { 0x39050000, 0x00010000 },
     /* ...repeating for a total of SIGI_VIRT_NR_UARTS, each of that size */
     [VIRT_GPIO] =               { 0x3A120000, 0x00010000 },
+    [VIRT_USB_CTRL] =           { 0x3A000000, 0x00010000 },
+    [VIRT_DWC_USB] =            { 0x3A820000, 0x00010000 },
     [VIRT_MEM] =                { 0x3000000000UL, 16UL * GiB },
 };
 
@@ -99,6 +105,7 @@ static const int a78irqmap[] = {
     [VIRT_GPIO] = 78, /* ...to 78 + SIGI_VIRT_NR_GPIO - 1*/
     [VIRT_PCIE_ECAM] = 127, /* ... to 130 */
     [VIRT_GEM] = 40, /* ... to 41 */
+    [VIRT_DWC_USB] = 132,
 };
 
 struct SigiVirt {
@@ -113,6 +120,7 @@ struct SigiVirt {
             DWAPBGPIOState gpio[SIGI_VIRT_NR_GPIO];
             CadenceGEMState gem[SIGI_VIRT_NR_GEMS];
             GPEXHost pcie;
+            USBDWC3 usb;
         } peri;
 
         ARMCPU cpus[SIGI_VIRT_NR_ACPUS];

@@ -141,6 +141,32 @@ static void create_gem(SigiVirt *s, int gem)
     }
 }
 
+static void create_usb(SigiVirt *s, int usb)
+{
+    MemoryRegion *sysmem = get_system_memory();
+    int irq = a78irqmap[usb];
+    hwaddr base = base_memmap[usb].base;
+    DeviceState *gicdev = DEVICE(&s->apu.gic);
+    DeviceState *dev;
+    MemoryRegion *mr;
+    USBDWC3 *usbc;
+
+    object_initialize_child(OBJECT(s), "usb", &s->apu.peri.usb,
+                            TYPE_USB_DWC3);
+    usbc = &s->apu.peri.usb;
+    dev = DEVICE(usbc);
+
+    qdev_prop_set_uint32(dev, "intrs", 1);
+    qdev_prop_set_uint32(dev, "slots", 2);
+    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+    memory_region_add_subregion(sysmem, base, mr);
+
+    sysbus_connect_irq(SYS_BUS_DEVICE(&usbc->sysbus_xhci), 0,
+                            qdev_get_gpio_in(gicdev, irq));
+}
+
 static void create_sdhci(SigiVirt *s, int sdhci)
 {
     MemoryRegion *sysmem = get_system_memory();
@@ -392,6 +418,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_gpio(s, VIRT_GPIO);
     create_pcie(s, VIRT_PCIE_ECAM);
     create_gem(s, VIRT_GEM);
+    create_usb(s, VIRT_DWC_USB);
     create_ddr_memmap(s, VIRT_MEM);
 }
 
