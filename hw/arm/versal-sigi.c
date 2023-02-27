@@ -100,6 +100,47 @@ static void create_uart(SigiVirt *s, int uart)
     }
 }
 
+static void create_gem(SigiVirt *s, int gem)
+{
+    MemoryRegion *sysmem = get_system_memory();
+    int irq = a78irqmap[gem];
+    hwaddr base = base_memmap[gem].base;
+    hwaddr size = base_memmap[gem].size;
+    DeviceState *gicdev = DEVICE(&s->apu.gic);
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(s->apu.peri.gem); i++) {
+        char *name;
+        NICInfo *nd = &nd_table[i];
+        DeviceState *dev;
+        MemoryRegion *mr;
+
+        name = g_strdup_printf("gem%d", i);
+
+        object_initialize_child(OBJECT(s), name, &s->apu.peri.gem[i],
+                                TYPE_CADENCE_GEM);
+        dev = DEVICE(&s->apu.peri.gem[i]);
+        /* FIXME use qdev NIC properties instead of nd_table[] */
+        if (nd->used) {
+            qemu_check_nic_model(nd, "cadence_gem");
+            qdev_set_nic_properties(dev, nd);
+        }
+        object_property_set_int(OBJECT(dev), "phy-addr", 23, &error_abort);
+        object_property_set_int(OBJECT(dev), "num-priority-queues", 2,
+                                &error_abort);
+        sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+        mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+        memory_region_add_subregion(sysmem, base, mr);
+
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+
+        base += size;
+        irq++;
+        g_free(name);
+    }
+}
+
 static void create_sdhci(SigiVirt *s, int sdhci)
 {
     MemoryRegion *sysmem = get_system_memory();
@@ -350,6 +391,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_sdhci(s, VIRT_SDHCI);
     create_gpio(s, VIRT_GPIO);
     create_pcie(s, VIRT_PCIE_ECAM);
+    create_gem(s, VIRT_GEM);
     create_ddr_memmap(s, VIRT_MEM);
 }
 

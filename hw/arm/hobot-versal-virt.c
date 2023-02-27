@@ -45,6 +45,7 @@ struct HobotVersalVirt {
     uint32_t clock_phandle;
     uint32_t gic_phandle;
     uint32_t msi_phandle;
+    uint32_t eth_phy_pandle[SIGI_VIRT_NR_GEMS];
     int psci_conduit;
     struct arm_boot_info bootinfo;
 
@@ -95,6 +96,7 @@ static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
 static void create_fdt(HobotVersalVirt *s)
 {
     MachineClass *mc = MACHINE_GET_CLASS(s);
+    int i;
 
     s->fdt = create_device_tree(&s->fdt_size);
     if (!s->fdt) {
@@ -105,6 +107,9 @@ static void create_fdt(HobotVersalVirt *s)
     /* Allocate all phandles.  */
     s->gic_phandle = qemu_fdt_alloc_phandle(s->fdt);
     s->clock_phandle = qemu_fdt_alloc_phandle(s->fdt);
+    for (i = 0; i < SIGI_VIRT_NR_GEMS; i++) {
+        s->eth_phy_pandle[i] = qemu_fdt_alloc_phandle(s->fdt);
+    }
 
     /* Create /chosen node for load_dtb.  */
     qemu_fdt_add_subnode(s->fdt, "/chosen");
@@ -468,6 +473,59 @@ static void fdt_add_gpio_nodes(const HobotVersalVirt *vms, int gpio)
     }
 }
 
+static void fdt_add_fixed_link_nodes(HobotVersalVirt *vms, char *gemname,
+                                     uint32_t phandle)
+{
+    char *name = g_strdup_printf("%s/fixed-link", gemname);
+
+    qemu_fdt_add_subnode(vms->fdt, name);
+    qemu_fdt_setprop_cell(vms->fdt, name, "phandle", phandle);
+    qemu_fdt_setprop(vms->fdt, name, "full-duplex", NULL, 0);
+    qemu_fdt_setprop_cell(vms->fdt, name, "speed", 1000);
+    g_free(name);
+}
+
+static void fdt_add_gem_nodes(HobotVersalVirt *vms, int gem)
+{
+    uint32_t nr_gem = ARRAY_SIZE(vms->soc.apu.peri.gem);
+    hwaddr base = base_memmap[gem].base;
+    hwaddr size = base_memmap[gem].size;
+    int irq = a78irqmap[gem];
+    const char clocknames[] = "pclk\0hclk\0tx_clk\0rx_clk";
+    const char compat_gem[] = "cdns,macb";
+    int i;
+
+    for (i = 0; i < nr_gem; i++) {
+        char *name = g_strdup_printf("/ethernet@%" PRIx64, base);
+        qemu_fdt_add_subnode(vms->fdt, name);
+
+        fdt_add_fixed_link_nodes(vms, name, vms->eth_phy_pandle[i]);
+        qemu_fdt_setprop_string(vms->fdt, name, "phy-mode", "rgmii-id");
+        qemu_fdt_setprop_cell(vms->fdt, name, "phy-handle",
+                              vms->eth_phy_pandle[i]);
+        qemu_fdt_setprop_cells(vms->fdt, name, "clocks",
+                               vms->clock_phandle, vms->clock_phandle,
+                               vms->clock_phandle, vms->clock_phandle);
+        qemu_fdt_setprop(vms->fdt, name, "clock-names",
+                         clocknames, sizeof(clocknames));
+        qemu_fdt_setprop_cells(vms->fdt, name, "interrupts",
+                               GIC_FDT_IRQ_TYPE_SPI, irq,
+                               GIC_FDT_IRQ_FLAGS_LEVEL_HI,
+                               GIC_FDT_IRQ_TYPE_SPI, irq,
+                               GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+        qemu_fdt_setprop_sized_cells(vms->fdt, name, "reg",
+                                     2, base, 2, size);
+        qemu_fdt_setprop(vms->fdt, name, "compatible",
+                         compat_gem, sizeof(compat_gem));
+        qemu_fdt_setprop_cell(vms->fdt, name, "#address-cells", 1);
+        qemu_fdt_setprop_cell(vms->fdt, name, "#size-cells", 0);
+
+        base += size;
+        irq++;
+        g_free(name);
+    }
+}
+
 static void fdt_add_uart_nodes(const HobotVersalVirt *vms, int uart)
 {
     char *nodename;
@@ -560,6 +618,7 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     fdt_add_uart_nodes(vms, VIRT_UART);
     fdt_add_gpio_nodes(vms, VIRT_GPIO);
     fdt_add_pcie_node(vms, VIRT_PCIE_ECAM);
+    fdt_add_gem_nodes(vms, VIRT_GEM);
     fdt_add_aliases_nodes(vms);
 
     vms->bootinfo.ram_size = machine->ram_size;
