@@ -77,6 +77,7 @@ enum {
     VIRT_PCIE_PIO,
     VIRT_PCIE_MMIO,
     VIRT_PCIE_MMIO_HIGH,
+    VIRT_L2SRAM,
     VIRT_LOWMEMMAP_LAST,
 };
 
@@ -96,6 +97,7 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_GPIO] =               { 0x3A120000, 0x00010000 },
     [VIRT_USB_CTRL] =           { 0x3A000000, 0x00010000 },
     [VIRT_DWC_USB] =            { 0x3A820000, 0x00010000 },
+    [VIRT_L2SRAM] =             { 0x04000000, 0x02000000 },
     [VIRT_MEM] =                { 0x3000000000UL, 16UL * GiB },
 };
 
@@ -129,6 +131,7 @@ struct SigiVirt {
     } apu;
 
     MemoryRegion mr_ddr;
+    MemoryRegion mr_l2sram;
 
     struct {
         MemoryRegion *mr_ddr;
