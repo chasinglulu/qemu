@@ -421,6 +421,50 @@ static void fdt_add_aliases_nodes(HobotVersalVirt *vms)
     }
 }
 
+static void fdt_add_usb_nodes(const HobotVersalVirt *vms)
+{
+    char *nodename;
+    hwaddr ctrl_base = base_memmap[VIRT_USB_CTRL].base;
+    hwaddr ctrl_size = base_memmap[VIRT_USB_CTRL].size;
+    hwaddr base = base_memmap[VIRT_DWC_USB].base;
+    hwaddr size = base_memmap[VIRT_DWC_USB].size;
+    int irq = a78irqmap[VIRT_DWC_USB];
+    const char ctrl_compat[] = "hobot,sigi-dwc3";
+    const char compat[] = "snps,dwc3";
+
+    nodename = g_strdup_printf("/usb@%" PRIx64, ctrl_base);
+    qemu_fdt_add_subnode(vms->fdt, nodename);
+    qemu_fdt_setprop(vms->fdt, nodename, "compatible",
+                            ctrl_compat, sizeof(ctrl_compat));
+    qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
+                                2, ctrl_base, 2, ctrl_size);
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "#address-cells", 2);
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "#size-cells", 2);
+    qemu_fdt_setprop(vms->fdt, nodename, "ranges", NULL, 0);
+    g_free(nodename);
+
+
+    nodename = g_strdup_printf("/usb@%" PRIx64 "/dwc_usb@%" PRIx64, ctrl_base, base);
+    qemu_fdt_add_subnode(vms->fdt, nodename);
+    qemu_fdt_setprop(vms->fdt, nodename, "compatible",
+                            compat, sizeof(compat));
+    qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
+                                2, base, 2, size);
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "#stream-id-cells", 1);
+    qemu_fdt_setprop_cells(vms->fdt, nodename, "interrupts",
+                                GIC_FDT_IRQ_TYPE_SPI, irq,
+                                GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+    qemu_fdt_setprop_string(vms->fdt, nodename, "interrupt-names", "dwc_usb3");
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "snps,quirk-frame-length-adjustment", 0x20);
+    qemu_fdt_setprop(vms->fdt, nodename, "snps,refclk_fladj", NULL, 0);
+    qemu_fdt_setprop(vms->fdt, nodename, "snps,enable_guctl1_resume_quirk", NULL, 0);
+    qemu_fdt_setprop(vms->fdt, nodename, "snps,enable_guctl1_ipd_quirk", NULL, 0);
+    qemu_fdt_setprop(vms->fdt, nodename, "snps,xhci-stream-quirk", NULL, 0);
+    qemu_fdt_setprop_string(vms->fdt, nodename, "dr_mode", "host");
+    qemu_fdt_setprop_string(vms->fdt, nodename, "phy-names", "usb3-phy");
+    g_free(nodename);
+}
+
 static void fdt_add_gpio_nodes(const HobotVersalVirt *vms, int gpio)
 {
     char *nodename, *portname, *bankname;
@@ -619,6 +663,7 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     fdt_add_gpio_nodes(vms, VIRT_GPIO);
     fdt_add_pcie_node(vms, VIRT_PCIE_ECAM);
     fdt_add_gem_nodes(vms, VIRT_GEM);
+    fdt_add_usb_nodes(vms);
     fdt_add_aliases_nodes(vms);
 
     vms->bootinfo.ram_size = machine->ram_size;
