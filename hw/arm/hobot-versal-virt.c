@@ -31,7 +31,7 @@
 #include "sysemu/sysemu.h"
 #include "qemu/log.h"
 
-#define TYPE_HOBOT_VERSAL_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-versal-virt")
+#define TYPE_HOBOT_VERSAL_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-sigi-virt")
 OBJECT_DECLARE_SIMPLE_TYPE(HobotVersalVirt, HOBOT_VERSAL_VIRT_MACHINE)
 
 struct HobotVersalVirt {

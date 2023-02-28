@@ -20,10 +20,8 @@
 #include "hw/arm/sigi-soc.h"
 #include "qom/object.h"
 #include "sysemu/sysemu.h"
-#include <stdbool.h>
-#include <stdint.h>
 
-#define TYPE_HOBOT_SIGI_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-sigi-virt")
+#define TYPE_HOBOT_SIGI_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-sigi-virt.dead")
 OBJECT_DECLARE_SIMPLE_TYPE(HobotSigiVirt, HOBOT_SIGI_VIRT_MACHINE)
 
 struct HobotSigiVirt {
