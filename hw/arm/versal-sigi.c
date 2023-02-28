@@ -34,6 +34,7 @@
 #include "hw/misc/unimp.h"
 #include "hw/nvme/nvme.h"
 #include "hw/gpio/dwapb_gpio.h"
+#include "sysemu/blockdev.h"
 
 #define SIGI_VIRT_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a78ae")
 
@@ -165,6 +166,34 @@ static void create_usb(SigiVirt *s, int usb)
 
     sysbus_connect_irq(SYS_BUS_DEVICE(&usbc->sysbus_xhci), 0,
                             qdev_get_gpio_in(gicdev, irq));
+}
+
+static void create_emmc_card(CadenceSDHCIState *cdns, int index)
+{
+    DriveInfo *di = drive_get(IF_NONE, 0, index);
+    BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+    DeviceState *emmc;
+
+    emmc = qdev_new(TYPE_EMMC);
+    emmc->id = g_strdup_printf("emmc%d", index);
+    object_property_add_child(OBJECT(cdns), "emmc[*]", OBJECT(emmc));
+    object_property_set_uint(OBJECT(emmc), "spec_version", 3, &error_fatal);
+    object_property_set_uint(OBJECT(emmc), "boot-config", 0, &error_fatal);
+    qdev_prop_set_drive_err(emmc, "drive", blk, &error_fatal);
+    qdev_realize_and_unref(emmc, cdns->bus, &error_fatal);
+}
+
+static void create_sd_card(CadenceSDHCIState *cdns, int index)
+{
+    DriveInfo *di = drive_get(IF_SD, 0, index);
+    BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+    DeviceState *card;
+
+    card = qdev_new(TYPE_SD_CARD);
+    card->id = g_strdup_printf("sd%d", index);
+    object_property_add_child(OBJECT(cdns), "card[*]", OBJECT(card));
+    qdev_prop_set_drive_err(card, "drive", blk, &error_fatal);
+    qdev_realize_and_unref(card, cdns->bus, &error_fatal);
 }
 
 static void create_sdhci(SigiVirt *s, int sdhci)
@@ -411,6 +440,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
 {
     SigiVirt *s = SIGI_VIRT(dev);
     MemoryRegion *sysmem = get_system_memory();
+    int i;
 
     create_apu(s);
     create_gic(s);
@@ -422,6 +452,14 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_usb(s, VIRT_DWC_USB);
     create_ddr_memmap(s, VIRT_MEM);
 
+    for (i = 0; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
+        if (s->cfg.has_emmc && i == 0) {
+            create_emmc_card(&s->apu.peri.mmc[i], i);
+            continue;
+        }
+        create_sd_card(&s->apu.peri.mmc[i], i);
+    }
+
     /* Create the On Chip Memory (L2SRAM).  */
     memory_region_init_ram(&s->mr_l2sram, OBJECT(s), "l2sram",
                            base_memmap[VIRT_L2SRAM].base, &error_fatal);
@@ -431,6 +469,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
 static Property sigi_virt_properties[] = {
     DEFINE_PROP_LINK("sigi-virt.ddr", SigiVirt, cfg.mr_ddr, TYPE_MEMORY_REGION,
                      MemoryRegion *),
+    DEFINE_PROP_BOOL("has-emmc", SigiVirt, cfg.has_emmc, false),
     DEFINE_PROP_END_OF_LIST()
 };
 
