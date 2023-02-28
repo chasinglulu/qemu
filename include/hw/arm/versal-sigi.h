@@ -136,6 +136,7 @@ struct SigiVirt {
     struct {
         MemoryRegion *mr_ddr;
         bool has_emmc;
+        bool virt;
     } cfg;
 };
 

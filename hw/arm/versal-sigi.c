@@ -38,6 +38,20 @@
 
 #define SIGI_VIRT_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a78ae")
 
+static bool sigi_virt_get_virt(Object *obj, Error **errp)
+{
+    SigiVirt *s = SIGI_VIRT(obj);
+
+    return s->cfg.virt;
+}
+
+static void sigi_virt_set_virt(Object *obj, bool value, Error **errp)
+{
+    SigiVirt *s = SIGI_VIRT(obj);
+
+    s->cfg.virt = value;
+}
+
 static void create_gpio(SigiVirt *s, int gpio)
 {
     MemoryRegion *sysmem = get_system_memory();
@@ -401,7 +415,8 @@ static void create_apu(SigiVirt *s)
                                 virt_cpu_mp_affinity(i), NULL);
 
         object_property_set_bool(cpuobj, "has_el3", false, NULL);
-        object_property_set_bool(cpuobj, "has_el2", false, NULL);
+        if (!s->cfg.virt)
+            object_property_set_bool(cpuobj, "has_el2", false, NULL);
         object_property_set_bool(cpuobj, "pmu", false, NULL);
 
         object_property_set_link(cpuobj, "memory", OBJECT(sysmem),
@@ -479,6 +494,13 @@ static void sigi_virt_class_init(ObjectClass *klass, void *data)
 
     dc->realize = sigi_virt_realize;
     device_class_set_props(dc, sigi_virt_properties);
+
+    object_class_property_add_bool(klass, "virtualization", sigi_virt_get_virt,
+                                   sigi_virt_set_virt);
+    object_class_property_set_description(klass, "virtualization",
+                                            "Set on/off to enable/disable emulating a "
+                                            "guest CPU which implements the ARM "
+                                            "Virtualization Extensions");
 }
 
 static void sigi_virt_init(Object *obj)
