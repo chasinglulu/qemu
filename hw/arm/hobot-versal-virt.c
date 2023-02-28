@@ -56,6 +56,13 @@ struct HobotVersalVirt {
     } cfg;
 };
 
+static void hobot_versal_virt_set_emmc(Object *obj, bool value, Error **errp)
+{
+    HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(obj);
+
+    s->cfg.has_emmc = value;
+}
+
 static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
 {
     int n;
@@ -641,7 +648,6 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
 {
     HobotVersalVirt *vms = HOBOT_VERSAL_VIRT_MACHINE(machine);
     MachineClass *mc = MACHINE_GET_CLASS(machine);
-    //MemoryRegion *sysmem = get_system_memory();
 
     mc->possible_cpu_arch_ids(machine);
 
@@ -651,6 +657,11 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
                             TYPE_SIGI_VIRT);
     object_property_set_link(OBJECT(&vms->soc), "sigi-virt.ddr",
                             OBJECT(machine->ram), &error_abort);
+
+    if (vms->cfg.has_emmc)
+        object_property_set_bool(OBJECT(&vms->soc), "has-emmc",
+                                vms->cfg.has_emmc, &error_abort);
+
     sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->soc), &error_fatal);
 
     create_fdt(vms);
@@ -703,6 +714,9 @@ static void hobot_versal_virt_mach_class_init(ObjectClass *oc, void *data)
     mc->no_cdrom = 1;
     mc->no_sdcard = 1;
     mc->default_ram_id = "sigi-virt.ddr";
+
+    object_class_property_add_bool(oc, "emmc", NULL,
+		            hobot_versal_virt_set_emmc);
 }
 
 static const TypeInfo hobot_versal_virt_mach_info = {
