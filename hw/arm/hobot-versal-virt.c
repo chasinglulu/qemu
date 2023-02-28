@@ -63,6 +63,13 @@ static void hobot_versal_virt_set_emmc(Object *obj, bool value, Error **errp)
     s->cfg.has_emmc = value;
 }
 
+static void hobot_versal_virt_set_virt(Object *obj, bool value, Error **errp)
+{
+    HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(obj);
+
+    s->cfg.virt = value;
+}
+
 static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
 {
     int n;
@@ -662,6 +669,10 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
         object_property_set_bool(OBJECT(&vms->soc), "has-emmc",
                                 vms->cfg.has_emmc, &error_abort);
 
+    if (vms->cfg.virt)
+        object_property_set_bool(OBJECT(&vms->soc), "virtualization",
+                                vms->cfg.virt, &error_abort);
+
     sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->soc), &error_fatal);
 
     create_fdt(vms);
@@ -717,6 +728,8 @@ static void hobot_versal_virt_mach_class_init(ObjectClass *oc, void *data)
 
     object_class_property_add_bool(oc, "emmc", NULL,
 		            hobot_versal_virt_set_emmc);
+    object_class_property_add_bool(oc, "virt", NULL,
+		            hobot_versal_virt_set_virt);
 }
 
 static const TypeInfo hobot_versal_virt_mach_info = {
