@@ -584,6 +584,55 @@ static void fdt_add_gem_nodes(HobotVersalVirt *vms, int gem)
     }
 }
 
+static void fdt_add_sdhci_nodes(const HobotVersalVirt *vms, int sdhci)
+{
+    char *nodename;
+    uint32_t nr_sdhci = ARRAY_SIZE(vms->soc.apu.peri.mmc);
+    hwaddr base = base_memmap[sdhci].base;
+    hwaddr size = base_memmap[sdhci].size;
+    int irq = a78irqmap[sdhci];
+    const char compat[] = "cdns,sd4hc";
+    int i;
+
+    /* Create nodes in incremental address */
+    base = base + size * (nr_sdhci - 1);
+    irq = irq + 2 * (nr_sdhci - 1);
+    for (i = nr_sdhci - 1; i >= 0; i--) {
+        nodename = g_strdup_printf("/sdhci@%" PRIx64, base);
+        qemu_fdt_add_subnode(vms->fdt, nodename);
+        /* Note that we can't use setprop_string because of the embedded NUL */
+        qemu_fdt_setprop(vms->fdt, nodename, "compatible",
+                            compat, sizeof(compat));
+        qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
+                                        2, base, 2, size);
+        qemu_fdt_setprop_cells(vms->fdt, nodename, "interrupts",
+                                GIC_FDT_IRQ_TYPE_SPI, irq,
+                                GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "clocks", vms->clock_phandle);
+        qemu_fdt_setprop_cells(vms->fdt, nodename, "sdhci-caps-mask", 0xffffffff, 0xffffffff);
+        qemu_fdt_setprop_cells(vms->fdt, nodename, "sdhci-caps", 0x70, 0x156ac800);
+
+        if (vms->cfg.has_emmc && i == 0) {
+            qemu_fdt_setprop(vms->fdt, nodename, "non-removable", NULL, 0);
+            qemu_fdt_setprop(vms->fdt, nodename, "no-sdio", NULL, 0);
+            qemu_fdt_setprop(vms->fdt, nodename, "no-sd", NULL, 0);
+            qemu_fdt_setprop_cell(vms->fdt, nodename, "bus-width", 8);
+            qemu_fdt_setprop(vms->fdt, nodename, "cap-mmc-highspeed", NULL, 0);
+            qemu_fdt_setprop(vms->fdt, nodename, "mmc-hs200-1_8v", NULL, 0);
+        }
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "max-frequency", 200000000);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "cdns,phy-input-delay-sd-default", 8);
+		qemu_fdt_setprop_cell(vms->fdt, nodename, "cdns,phy-input-delay-mmc-highspeed", 3);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "cdns,phy-input-delay-mmc-ddr", 3);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "cdns,phy-dll-delay-strobe", 33);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "cdns,phy-dll-delay-sdclk", 45);
+        qemu_fdt_setprop_cell(vms->fdt, nodename, "cdns,phy-dll-delay-sdclk-hsmmc", 45);
+
+        base -= size;
+        irq -= 2;
+    }
+}
+
 static void fdt_add_uart_nodes(const HobotVersalVirt *vms, int uart)
 {
     char *nodename;
@@ -686,6 +735,7 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     fdt_add_pcie_node(vms, VIRT_PCIE_ECAM);
     fdt_add_gem_nodes(vms, VIRT_GEM);
     fdt_add_usb_nodes(vms);
+    fdt_add_sdhci_nodes(vms, VIRT_SDHCI);
     fdt_add_aliases_nodes(vms);
 
     vms->bootinfo.ram_size = machine->ram_size;
