@@ -451,6 +451,11 @@ static void create_ddr_memmap(SigiVirt *s, int virt_mem)
     g_free(name);
 }
 
+static void create_unimp(SigiVirt *s)
+{
+    create_unimplemented_device("peri-sysreg", 0x39010000, 0x10000);
+}
+
 static void sigi_virt_realize(DeviceState *dev, Error **errp)
 {
     SigiVirt *s = SIGI_VIRT(dev);
@@ -466,6 +471,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_gem(s, VIRT_GEM);
     create_usb(s, VIRT_DWC_USB);
     create_ddr_memmap(s, VIRT_MEM);
+    create_unimp(s);
 
     for (i = 0; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
         if (s->cfg.has_emmc && i == 0) {
