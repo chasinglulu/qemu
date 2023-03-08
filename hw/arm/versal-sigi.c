@@ -243,6 +243,34 @@ static void create_sdhci(SigiVirt *s, int sdhci)
     }
 }
 
+static void create_i2c(SigiVirt *s, int i2c)
+{
+    MemoryRegion *sysmem = get_system_memory();
+    int irq = a78irqmap[i2c];
+    hwaddr base = base_memmap[i2c].base;
+    hwaddr size = base_memmap[i2c].size;
+    DeviceState *gicdev = DEVICE(&s->apu.gic);
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(s->apu.peri.i2c); i++) {
+        DeviceState *dev;
+        MemoryRegion *mr;
+
+        object_initialize_child(OBJECT(s), "i2c[*]", &s->apu.peri.i2c[i],
+                                TYPE_DWAPB_I2C);
+        dev = DEVICE(&s->apu.peri.i2c[i]);
+        dev->id = g_strdup_printf("i2c%d", i);
+        sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+        mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+        memory_region_add_subregion(sysmem, base, mr);
+
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+
+        base += size;
+        irq++;
+    }
+}
+
 static void create_its(SigiVirt *s)
 {
     const char *itsclass = its_class_name();
@@ -470,6 +498,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_pcie(s, VIRT_PCIE_ECAM);
     create_gem(s, VIRT_GEM);
     create_usb(s, VIRT_DWC_USB);
+    create_i2c(s, VIRT_I2C);
     create_ddr_memmap(s, VIRT_MEM);
     create_unimp(s);
 

@@ -37,6 +37,7 @@
 #include "hw/net/cadence_gem.h"
 #include "hw/register.h"
 #include "hw/usb/hcd-dwc3.h"
+#include "hw/i2c//dwapb_i2c.h"
 
 #define TYPE_SIGI_VIRT "sigi-virt"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
@@ -48,6 +49,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
 #define SIGI_VIRT_NR_SDHCI      2
 #define SIGI_VIRT_NR_GPIO       2
 #define SIGI_VIRT_NR_GEMS       2
+#define SIGI_VIRT_NR_I2C        4
 #define SIGI_VIRT_NUM_IRQS      256
 
 /* Cadence SDHCI capabilities register */
@@ -78,6 +80,7 @@ enum {
     VIRT_PCIE_MMIO,
     VIRT_PCIE_MMIO_HIGH,
     VIRT_L2SRAM,
+    VIRT_I2C,
     VIRT_LOWMEMMAP_LAST,
 };
 
@@ -94,6 +97,8 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_SDHCI] =              { 0x39030000, 0x00010000 },
     [VIRT_UART] =               { 0x39050000, 0x00010000 },
     /* ...repeating for a total of SIGI_VIRT_NR_UARTS, each of that size */
+    [VIRT_I2C] =                { 0x3A030000, 0x00010000 },
+    /* ...repeating for a total of SIGI_VIRT_NR_I2C, each of that size */
     [VIRT_GPIO] =               { 0x3A120000, 0x00010000 },
     [VIRT_USB_CTRL] =           { 0x3A000000, 0x00010000 },
     [VIRT_DWC_USB] =            { 0x3A820000, 0x00010000 },
@@ -108,6 +113,7 @@ static const int a78irqmap[] = {
     [VIRT_PCIE_ECAM] = 127, /* ... to 130 */
     [VIRT_GEM] = 40, /* ... to 41 */
     [VIRT_DWC_USB] = 132,
+    [VIRT_I2C] = 101,   /* ... to 103 */
 };
 
 struct SigiVirt {
@@ -121,6 +127,7 @@ struct SigiVirt {
             CadenceSDHCIState mmc[SIGI_VIRT_NR_SDHCI];
             DWAPBGPIOState gpio[SIGI_VIRT_NR_GPIO];
             CadenceGEMState gem[SIGI_VIRT_NR_GEMS];
+            DWAPBI2CState i2c[SIGI_VIRT_NR_I2C];
             GPEXHost pcie;
             USBDWC3 usb;
         } peri;
