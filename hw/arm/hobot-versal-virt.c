@@ -128,6 +128,13 @@ static void create_fdt(HobotVersalVirt *s)
     /* Create /chosen node for load_dtb.  */
     qemu_fdt_add_subnode(s->fdt, "/chosen");
 
+    /* Create /soc node for load_dtb. */
+    qemu_fdt_add_subnode(s->fdt, "/soc");
+    qemu_fdt_setprop(s->fdt, "/soc", "ranges", NULL, 0);
+    qemu_fdt_setprop_cell(s->fdt, "/soc", "#size-cells", 0x2);
+    qemu_fdt_setprop_cell(s->fdt, "/soc", "#address-cells", 0x2);
+    qemu_fdt_setprop_string(s->fdt, "/soc", "compatible", "simple-bus");
+
     /* Header */
     qemu_fdt_setprop_cell(s->fdt, "/", "interrupt-parent", s->gic_phandle);
     qemu_fdt_setprop_cell(s->fdt, "/", "#size-cells", 0x2);
@@ -313,7 +320,7 @@ static void fdt_add_pcie_node(HobotVersalVirt *vms, int pcie)
     int irq = a78irqmap[pcie];
     int nr_pcie_buses = size / PCIE_MMCFG_SIZE_MIN;
 
-    nodename = g_strdup_printf("/pcie@%" PRIx64, base);
+    nodename = g_strdup_printf("/soc/pcie@%" PRIx64, base);
     qemu_fdt_add_subnode(vms->fdt, nodename);
     qemu_fdt_setprop_string(vms->fdt, nodename,
                             "compatible", "pci-host-ecam-generic");
@@ -446,7 +453,7 @@ static void fdt_add_usb_nodes(const HobotVersalVirt *vms)
     const char ctrl_compat[] = "hobot,sigi-dwc3";
     const char compat[] = "snps,dwc3";
 
-    nodename = g_strdup_printf("/usb@%" PRIx64, ctrl_base);
+    nodename = g_strdup_printf("/soc/usb@%" PRIx64, ctrl_base);
     qemu_fdt_add_subnode(vms->fdt, nodename);
     qemu_fdt_setprop(vms->fdt, nodename, "compatible",
                             ctrl_compat, sizeof(ctrl_compat));
@@ -458,7 +465,7 @@ static void fdt_add_usb_nodes(const HobotVersalVirt *vms)
     g_free(nodename);
 
 
-    nodename = g_strdup_printf("/usb@%" PRIx64 "/dwc_usb@%" PRIx64, ctrl_base, base);
+    nodename = g_strdup_printf("/soc/usb@%" PRIx64 "/dwc_usb@%" PRIx64, ctrl_base, base);
     qemu_fdt_add_subnode(vms->fdt, nodename);
     qemu_fdt_setprop(vms->fdt, nodename, "compatible",
                             compat, sizeof(compat));
@@ -490,7 +497,7 @@ static void fdt_add_gpio_nodes(const HobotVersalVirt *vms, int gpio)
     int i, j;
 
     for (i = 0; i < ARRAY_SIZE(vms->soc.apu.peri.gpio); i++) {
-        nodename = g_strdup_printf("/gpio@%" PRIx64, base);
+        nodename = g_strdup_printf("/soc/gpio@%" PRIx64, base);
         qemu_fdt_add_subnode(vms->fdt, nodename);
         qemu_fdt_setprop(vms->fdt, nodename, "compatible",
                             compat, sizeof(compat));
@@ -554,7 +561,7 @@ static void fdt_add_gem_nodes(HobotVersalVirt *vms, int gem)
     int i;
 
     for (i = 0; i < nr_gem; i++) {
-        char *name = g_strdup_printf("/ethernet@%" PRIx64, base);
+        char *name = g_strdup_printf("/soc/ethernet@%" PRIx64, base);
         qemu_fdt_add_subnode(vms->fdt, name);
 
         fdt_add_fixed_link_nodes(vms, name, vms->eth_phy_pandle[i]);
@@ -598,7 +605,7 @@ static void fdt_add_sdhci_nodes(const HobotVersalVirt *vms, int sdhci)
     base = base + size * (nr_sdhci - 1);
     irq = irq + 2 * (nr_sdhci - 1);
     for (i = nr_sdhci - 1; i >= 0; i--) {
-        nodename = g_strdup_printf("/sdhci@%" PRIx64, base);
+        nodename = g_strdup_printf("/soc/sdhci@%" PRIx64, base);
         qemu_fdt_add_subnode(vms->fdt, nodename);
         /* Note that we can't use setprop_string because of the embedded NUL */
         qemu_fdt_setprop(vms->fdt, nodename, "compatible",
@@ -648,7 +655,7 @@ static void fdt_add_uart_nodes(const HobotVersalVirt *vms, int uart)
     base = base + size * (nr_uart - 1);
     irq = irq + nr_uart - 1;
     for (i = nr_uart - 1; i >= 0; i--) {
-        nodename = g_strdup_printf("/serial@%" PRIx64, base);
+        nodename = g_strdup_printf("/soc/serial@%" PRIx64, base);
         qemu_fdt_add_subnode(vms->fdt, nodename);
         /* Note that we can't use setprop_string because of the embedded NUL */
         qemu_fdt_setprop(vms->fdt, nodename, "compatible",
