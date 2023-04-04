@@ -33,10 +33,10 @@
 OBJECT_DECLARE_SIMPLE_TYPE(DWAPBI2CState, DWAPB_I2C)
 
 /* DWAPB I2C memory map */
-#define DWAPB_I2C_MEM_SIZE              0x14
-#define I2CCON_ADDR                       0x00  /* control register */
-#define I2CSTAT_ADDR                      0x04  /* control/status register */
-#define I2CADD_ADDR                       0x08  /* address register */
+#define DWAPB_I2C_MEM_SIZE              0x200
+#define I2C_CON_ADDR                       0x00  /* control register */
+#define I2C_TAR_ADDR                      0x04  /* control/status register */
+#define I2C_SAR_ADDR                       0x08  /* address register */
 #define I2CDS_ADDR                        0x0c  /* data shift register */
 #define I2CLC_ADDR                        0x10  /* line control register */
 
@@ -59,11 +59,39 @@ struct DWAPBI2CState {
     I2CBus *bus;
     qemu_irq irq;
 
-    uint8_t i2ccon;
-    uint8_t i2cstat;
-    uint8_t i2cadd;
-    uint8_t i2cds;
-    uint8_t i2clc;
-    bool scl_free;
+    uint32_t i2c_con;
+    uint32_t i2c_tar;
+    uint32_t i2c_sar;
+    uint32_t i2c_hs_maddr;
+    uint32_t i2c_data_cmd;
+    uint32_t i2c_intr_stat;
+    uint32_t i2c_intr_mask;
+    uint32_t i2c_raw_intr_stat;
+    uint32_t i2c_rx_tl;
+    uint32_t i2c_tx_tl;
+    uint32_t i2c_clr_intr;
+    uint32_t i2c_clr_rx_under;
+    uint32_t i2c_clr_rx_over;
+    uint32_t i2c_clr_tx_over;
+    uint32_t i2c_clr_rd_req;
+    uint32_t i2c_clr_tx_abrt;
+    uint32_t i2c_clr_rx_done;
+    uint32_t i2c_clr_activity;
+    uint32_t i2c_clr_stop_det;
+    uint32_t i2c_clr_start_det;
+    uint32_t i2c_clr_gen_call;
+    uint32_t i2c_enable;
+    uint32_t i2c_status;
+    uint32_t i2c_txflr;
+    uint32_t i2c_rxflr;
+    uint32_t i2c_sda_hold;
+    uint32_t i2c_tx_abrt_source;
+    uint32_t i2c_slv_data_nack_only;
+    uint32_t i2c_dma_cr;
+    uint32_t i2c_dma_tdlr;
+    uint32_t i2c_dma_rdlr;
+    uint32_t i2c_sda_setup;
+    uint32_t i2c_ack_general_call;
+    uint32_t i2c_enable_status;
 };
 #endif

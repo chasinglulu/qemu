@@ -29,7 +29,7 @@
 #include "hw/i2c/dwapb_i2c.h"
 
 #ifndef DWAPB_I2C_DEBUG
-#define DWAPB_I2C_DEBUG                 0
+#define DWAPB_I2C_DEBUG                 1
 #endif
 
 #if DWAPB_I2C_DEBUG
@@ -39,16 +39,10 @@
 static const char *dwapb_i2c_get_regname(unsigned offset)
 {
     switch (offset) {
-    case I2CCON_ADDR:
-        return "I2CCON";
-    case I2CSTAT_ADDR:
-        return "I2CSTAT";
-    case I2CADD_ADDR:
-        return "I2CADD";
-    case I2CDS_ADDR:
-        return "I2CDS";
-    case I2CLC_ADDR:
-        return "I2CLC";
+    case I2C_CON_ADDR:
+        return "I2C_CONTROL_REG";
+    case I2C_TAR_ADDR:
+        return "I2C_TARGET_REG";
     default:
         return "[?]";
     }
@@ -57,21 +51,16 @@ static const char *dwapb_i2c_get_regname(unsigned offset)
 #define DPRINT(fmt, args...)              do { } while (0)
 #endif
 
+/*
 static inline void dwapb_i2c_raise_interrupt(DWAPBI2CState *s)
 {
-    if (s->i2ccon & I2CCON_INTRS_EN) {
-        s->i2ccon |= I2CCON_INT_PEND;
-        qemu_irq_raise(s->irq);
-    }
+    qemu_irq_raise(s->irq);
 }
 
 static void dwapb_i2c_data_receive(void *opaque)
 {
     DWAPBI2CState *s = (DWAPBI2CState *)opaque;
 
-    s->i2cstat &= ~I2CSTAT_LAST_BIT;
-    s->scl_free = false;
-    s->i2cds = i2c_recv(s->bus);
     dwapb_i2c_raise_interrupt(s);
 }
 
@@ -79,13 +68,9 @@ static void dwapb_i2c_data_send(void *opaque)
 {
     DWAPBI2CState *s = (DWAPBI2CState *)opaque;
 
-    s->i2cstat &= ~I2CSTAT_LAST_BIT;
-    s->scl_free = false;
-    if (i2c_send(s->bus, s->i2cds) < 0 && (s->i2ccon & I2CCON_ACK_GEN)) {
-        s->i2cstat |= I2CSTAT_LAST_BIT;
-    }
     dwapb_i2c_raise_interrupt(s);
 }
+*/
 
 static uint64_t dwapb_i2c_read(void *opaque, hwaddr offset,
                                  unsigned size)
@@ -94,26 +79,8 @@ static uint64_t dwapb_i2c_read(void *opaque, hwaddr offset,
     uint8_t value;
 
     switch (offset) {
-    case I2CCON_ADDR:
-        value = s->i2ccon;
-        break;
-    case I2CSTAT_ADDR:
-        value = s->i2cstat;
-        break;
-    case I2CADD_ADDR:
-        value = s->i2cadd;
-        break;
-    case I2CDS_ADDR:
-        value = s->i2cds;
-        s->scl_free = true;
-        if (DWAPB_I2C_MODE(s->i2cstat) == I2CMODE_MASTER_Rx &&
-               (s->i2cstat & I2CSTAT_START_BUSY) &&
-               !(s->i2ccon & I2CCON_INT_PEND)) {
-            dwapb_i2c_data_receive(s);
-        }
-        break;
-    case I2CLC_ADDR:
-        value = s->i2clc;
+    case I2C_CON_ADDR:
+        value = s->i2c_con;
         break;
     default:
         value = 0;
@@ -136,85 +103,8 @@ static void dwapb_i2c_write(void *opaque, hwaddr offset,
             (unsigned int)offset, v);
 
     switch (offset) {
-    case I2CCON_ADDR:
-        s->i2ccon = (v & ~I2CCON_INT_PEND) | (s->i2ccon & I2CCON_INT_PEND);
-        if ((s->i2ccon & I2CCON_INT_PEND) && !(v & I2CCON_INT_PEND)) {
-            s->i2ccon &= ~I2CCON_INT_PEND;
-            qemu_irq_lower(s->irq);
-            if (!(s->i2ccon & I2CCON_INTRS_EN)) {
-                s->i2cstat &= ~I2CSTAT_START_BUSY;
-            }
-
-            if (s->i2cstat & I2CSTAT_START_BUSY) {
-                if (s->scl_free) {
-                    if (DWAPB_I2C_MODE(s->i2cstat) == I2CMODE_MASTER_Tx) {
-                        dwapb_i2c_data_send(s);
-                    } else if (DWAPB_I2C_MODE(s->i2cstat) ==
-                            I2CMODE_MASTER_Rx) {
-                        dwapb_i2c_data_receive(s);
-                    }
-                } else {
-                    s->i2ccon |= I2CCON_INT_PEND;
-                    qemu_irq_raise(s->irq);
-                }
-            }
-        }
-        break;
-    case I2CSTAT_ADDR:
-        s->i2cstat =
-                (s->i2cstat & I2CSTAT_START_BUSY) | (v & ~I2CSTAT_START_BUSY);
-
-        if (!(s->i2cstat & I2CSTAT_OUTPUT_EN)) {
-            s->i2cstat &= ~I2CSTAT_START_BUSY;
-            s->scl_free = true;
-            qemu_irq_lower(s->irq);
-            break;
-        }
-
-        /* Nothing to do if in i2c slave mode */
-        if (!I2C_IN_MASTER_MODE(s->i2cstat)) {
-            break;
-        }
-
-        if (v & I2CSTAT_START_BUSY) {
-            s->i2cstat &= ~I2CSTAT_LAST_BIT;
-            s->i2cstat |= I2CSTAT_START_BUSY;    /* Line is busy */
-            s->scl_free = false;
-
-            /* Generate start bit and send slave address */
-            if (i2c_start_transfer(s->bus, s->i2cds >> 1, s->i2cds & 0x1) &&
-                    (s->i2ccon & I2CCON_ACK_GEN)) {
-                s->i2cstat |= I2CSTAT_LAST_BIT;
-            } else if (DWAPB_I2C_MODE(s->i2cstat) == I2CMODE_MASTER_Rx) {
-                dwapb_i2c_data_receive(s);
-            }
-            dwapb_i2c_raise_interrupt(s);
-        } else {
-            i2c_end_transfer(s->bus);
-            if (!(s->i2ccon & I2CCON_INT_PEND)) {
-                s->i2cstat &= ~I2CSTAT_START_BUSY;
-            }
-            s->scl_free = true;
-        }
-        break;
-    case I2CADD_ADDR:
-        if ((s->i2cstat & I2CSTAT_OUTPUT_EN) == 0) {
-            s->i2cadd = v;
-        }
-        break;
-    case I2CDS_ADDR:
-        if (s->i2cstat & I2CSTAT_OUTPUT_EN) {
-            s->i2cds = v;
-            s->scl_free = true;
-            if (DWAPB_I2C_MODE(s->i2cstat) == I2CMODE_MASTER_Tx &&
-                    (s->i2cstat & I2CSTAT_START_BUSY) &&
-                    !(s->i2ccon & I2CCON_INT_PEND)) {
-                dwapb_i2c_data_send(s);
-            }
-        }
-        break;
-    case I2CLC_ADDR:
-        s->i2clc = v;
+    case I2C_CON_ADDR:
+        s->i2c_con = v;
         break;
     default:
         DPRINT("ERROR: Bad write offset 0x%x\n", (unsigned int)offset);
@@ -233,12 +123,39 @@ static const VMStateDescription dwapb_i2c_vmstate = {
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT8(i2ccon, DWAPBI2CState),
-        VMSTATE_UINT8(i2cstat, DWAPBI2CState),
-        VMSTATE_UINT8(i2cds, DWAPBI2CState),
-        VMSTATE_UINT8(i2cadd, DWAPBI2CState),
-        VMSTATE_UINT8(i2clc, DWAPBI2CState),
-        VMSTATE_BOOL(scl_free, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_con, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_tar, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_sar, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_hs_maddr, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_data_cmd, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_intr_stat, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_intr_mask, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_raw_intr_stat, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_rx_tl, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_tx_tl, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_clr_rx_under, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_clr_rx_over, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_clr_tx_over, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_clr_rd_req, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_clr_tx_abrt, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_clr_rx_done, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_clr_activity, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_clr_stop_det, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_clr_start_det, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_clr_gen_call, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_enable, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_status, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_txflr, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_rxflr, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_sda_hold, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_tx_abrt_source, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_slv_data_nack_only, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_dma_cr, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_dma_tdlr, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_dma_rdlr, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_sda_setup, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_ack_general_call, DWAPBI2CState),
+        VMSTATE_UINT32(i2c_enable_status, DWAPBI2CState),
         VMSTATE_END_OF_LIST()
     }
 };
@@ -247,12 +164,8 @@ static void dwapb_i2c_reset(DeviceState *d)
 {
     DWAPBI2CState *s = DWAPB_I2C(d);
 
-    s->i2ccon  = 0x00;
-    s->i2cstat = 0x00;
-    s->i2cds   = 0xFF;
-    s->i2clc   = 0x00;
-    s->i2cadd  = 0xFF;
-    s->scl_free = true;
+    s->i2c_con  = 0x00;
+ 
 }
 
 static void dwapb_i2c_init(Object *obj)
