@@ -20,3 +20,6 @@ GTAGS
 *.swp
 *.patch
 *.gcov
+/.cache/
+/.clangd/
+compile_commands.json
