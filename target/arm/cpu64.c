@@ -926,12 +926,13 @@ static void aarch64_a78ae_initfn(Object *obj)
     set_feature(&cpu->env, ARM_FEATURE_GENERIC_TIMER);
     set_feature(&cpu->env, ARM_FEATURE_AARCH64);
     set_feature(&cpu->env, ARM_FEATURE_CBAR_RO);
+    set_feature(&cpu->env, ARM_FEATURE_AUXCR);
     set_feature(&cpu->env, ARM_FEATURE_EL2);
     set_feature(&cpu->env, ARM_FEATURE_EL3);
     set_feature(&cpu->env, ARM_FEATURE_PMU);
 
     /* Ordered by B2.4 AArch64 registers by functional group */
-    cpu->clidr = 0x82000023;
+    cpu->clidr = 0x83000123;
     cpu->ctr = 0x8444C004;
     cpu->dcz_blocksize = 4;
     cpu->isar.id_aa64dfr0  = 0x0000000010305408ull;
@@ -939,7 +940,7 @@ static void aarch64_a78ae_initfn(Object *obj)
     cpu->isar.id_aa64isar1 = 0x0000000000100001ull;
     cpu->isar.id_aa64mmfr0 = 0x0000000000101122ull;
     cpu->isar.id_aa64mmfr1 = 0x0000000010212122ull;
-    cpu->isar.id_aa64mmfr2 = 0x0000000000001011ull;
+    cpu->isar.id_aa64mmfr2 = 0x0000000100001011ull;
     cpu->isar.id_aa64pfr0  = 0x1100000010111112ull; /* GIC filled in later */
     cpu->isar.id_aa64pfr1  = 0x0000000000000010ull;
     cpu->id_afr0       = 0x00000000;
@@ -959,7 +960,7 @@ static void aarch64_a78ae_initfn(Object *obj)
     cpu->isar.id_pfr0  = 0x10010131;
     cpu->isar.id_pfr1  = 0x00010000; /* GIC filled in later */
     cpu->isar.id_pfr2  = 0x00000011;
-    cpu->midr = 0x414fd0b1;          /* r4p1 */
+    cpu->midr = 0x410fd422;          /* r0p2 */
     cpu->revidr = 0;
 
     /* From B2.18 CCSIDR_EL1 */
