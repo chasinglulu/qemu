@@ -394,6 +394,18 @@ config XLNX_VERSAL
     select XLNX_BBRAM
     select XLNX_EFUSE_VERSAL
 
+config HOBOT_VIRT
+    bool
+    imply PCI_DEVICES
+    select ARM_GIC
+    select PCI
+    select PCI_EXPRESS
+    select PCI_EXPRESS_GENERIC_BRIDGE
+    select SERIAL
+    select UNIMP
+    select CADENCE_SDHCI
+    select DWAPB_GPIO
+
 config NPCM7XX
     bool
     select A9MPCORE
