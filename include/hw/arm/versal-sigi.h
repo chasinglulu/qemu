@@ -63,9 +63,11 @@ OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
 #define ARCH_TIMER_NS_EL2_IRQ 10
 
 #define VIRTUAL_PMU_IRQ 7
+#define DDR_SIZE    (96UL * GiB)
 
 enum {
     VIRT_MEM,
+    VIRT_INTERLEVEL_MEM,
     VIRT_GIC_DIST,
     VIRT_GIC_ITS,
     VIRT_GIC_REDIST,
@@ -103,7 +105,8 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_USB_CTRL] =           { 0x3A000000, 0x00010000 },
     [VIRT_DWC_USB] =            { 0x3A820000, 0x00010000 },
     [VIRT_L2SRAM] =             { 0x04000000, 0x02000000 },
-    [VIRT_MEM] =                { 0x3000000000UL, 16UL * GiB },
+    [VIRT_MEM] =                { 0x3000000000UL, DDR_SIZE },
+    [VIRT_INTERLEVEL_MEM] =     { 0x1000000000UL, DDR_SIZE },
 };
 
 static const int a78irqmap[] = {
@@ -137,7 +140,8 @@ struct SigiVirt {
         GICv3ITSState its;
     } apu;
 
-    MemoryRegion mr_ddr;
+    MemoryRegion mr_non_interleave_ddr;
+    MemoryRegion mr_interleave_ddr;
     MemoryRegion mr_l2sram;
 
     struct {

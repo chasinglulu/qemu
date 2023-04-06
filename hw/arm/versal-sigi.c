@@ -463,6 +463,7 @@ static void create_ddr_memmap(SigiVirt *s, int virt_mem)
     MemoryRegion *sysmem = get_system_memory();
     hwaddr base = base_memmap[virt_mem].base;
     hwaddr size = base_memmap[virt_mem].size;
+    hwaddr interleave_base = base_memmap[VIRT_INTERLEVEL_MEM].base;
     uint64_t offset = 0;
     char *name;
     uint64_t mapsize;
@@ -470,12 +471,18 @@ static void create_ddr_memmap(SigiVirt *s, int virt_mem)
     mapsize = cfg_ddr_size < size ? cfg_ddr_size : size;
     name = g_strdup_printf("sigi-ddr");
     /* Create the MR alias.  */
-    memory_region_init_alias(&s->mr_ddr, OBJECT(s),
+    memory_region_init_alias(&s->mr_non_interleave_ddr, OBJECT(s),
+                                name, s->cfg.mr_ddr,
+                                offset, mapsize);
+
+    name = g_strdup_printf("sigi-interleave-ddr");
+    memory_region_init_alias(&s->mr_interleave_ddr, OBJECT(s),
                                 name, s->cfg.mr_ddr,
                                 offset, mapsize);
 
     /* Map it onto the main system MR.  */
-    memory_region_add_subregion(sysmem, base, &s->mr_ddr);
+    memory_region_add_subregion(sysmem, base, &s->mr_non_interleave_ddr);
+    memory_region_add_subregion(sysmem, interleave_base, &s->mr_interleave_ddr);
     g_free(name);
 }
 
