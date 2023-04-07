@@ -137,7 +137,10 @@ static void generic_loader_realize(DeviceState *dev, Error **errp)
     big_endian = target_words_bigendian();
 
     if (s->file) {
-        AddressSpace *as = s->cpu ? s->cpu->as :  NULL;
+        AddressSpace *as = NULL;
+
+        if (s->cpu)
+            as = cpu_get_address_space(s->cpu, s->asidx);
 
         if (!s->force_raw) {
             size = load_elf_as(s->file, NULL, NULL, NULL, &entry, NULL, NULL,
@@ -187,6 +190,7 @@ static Property generic_loader_props[] = {
     DEFINE_PROP_UINT32("cpu-num", GenericLoaderState, cpu_num, CPU_NONE),
     DEFINE_PROP_BOOL("force-raw", GenericLoaderState, force_raw, false),
     DEFINE_PROP_STRING("file", GenericLoaderState, file),
+    DEFINE_PROP_UINT8("asidx", GenericLoaderState, asidx, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 

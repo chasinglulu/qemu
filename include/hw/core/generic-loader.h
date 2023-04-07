@@ -33,6 +33,7 @@ struct GenericLoaderState {
     uint64_t data;
     uint8_t data_len;
     uint32_t cpu_num;
+    uint8_t asidx;
 
     char *file;
 
