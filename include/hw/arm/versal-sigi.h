@@ -50,7 +50,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
 #define SIGI_VIRT_NR_GPIO       2
 #define SIGI_VIRT_NR_GEMS       2
 #define SIGI_VIRT_NR_I2C        4
-#define SIGI_VIRT_NUM_IRQS      256
+#define SIGI_VIRT_NUM_IRQS      960
 
 /* Cadence SDHCI capabilities register */
 #define SDHCI_CAPABILITIES  0x70156ac800UL
@@ -148,6 +148,7 @@ struct SigiVirt {
         MemoryRegion *mr_ddr;
         bool has_emmc;
         bool virt;
+        bool secure;
     } cfg;
 };
 

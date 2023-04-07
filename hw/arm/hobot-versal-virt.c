@@ -70,6 +70,13 @@ static void hobot_versal_virt_set_virt(Object *obj, bool value, Error **errp)
     s->cfg.virt = value;
 }
 
+static void hobot_versal_virt_set_secure(Object *obj, bool value, Error **errp)
+{
+    HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(obj);
+
+    s->cfg.secure = value;
+}
+
 static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
 {
     int n;
@@ -729,6 +736,10 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
         object_property_set_bool(OBJECT(&vms->soc), "virtualization",
                                 vms->cfg.virt, &error_abort);
 
+    if(vms->cfg.secure)
+        object_property_set_bool(OBJECT(&vms->soc), "secure",
+                                vms->cfg.secure, &error_abort);
+
     sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->soc), &error_fatal);
 
     create_fdt(vms);
@@ -787,6 +798,8 @@ static void hobot_versal_virt_mach_class_init(ObjectClass *oc, void *data)
 		            hobot_versal_virt_set_emmc);
     object_class_property_add_bool(oc, "virt", NULL,
 		            hobot_versal_virt_set_virt);
+    object_class_property_add_bool(oc, "secure", NULL,
+		            hobot_versal_virt_set_secure);
 }
 
 static const TypeInfo hobot_versal_virt_mach_info = {

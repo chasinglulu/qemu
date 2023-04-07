@@ -52,6 +52,20 @@ static void sigi_virt_set_virt(Object *obj, bool value, Error **errp)
     s->cfg.virt = value;
 }
 
+static bool virt_get_secure(Object *obj, Error **errp)
+{
+    SigiVirt *s = SIGI_VIRT(obj);
+
+    return s->cfg.secure;
+}
+
+static void virt_set_secure(Object *obj, bool value, Error **errp)
+{
+    SigiVirt *s = SIGI_VIRT(obj);
+
+    s->cfg.secure = value;
+}
+
 static void create_gpio(SigiVirt *s, int gpio)
 {
     MemoryRegion *sysmem = get_system_memory();
@@ -442,9 +456,12 @@ static void create_apu(SigiVirt *s)
         object_property_set_int(cpuobj, "mp-affinity",
                                 virt_cpu_mp_affinity(i), NULL);
 
-        object_property_set_bool(cpuobj, "has_el3", false, NULL);
+        if (!s->cfg.secure)
+            object_property_set_bool(cpuobj, "has_el3", false, NULL);
+
         if (!s->cfg.virt)
             object_property_set_bool(cpuobj, "has_el2", false, NULL);
+
         object_property_set_bool(cpuobj, "pmu", false, NULL);
 
         object_property_set_link(cpuobj, "memory", OBJECT(sysmem),
@@ -543,6 +560,11 @@ static void sigi_virt_class_init(ObjectClass *klass, void *data)
                                             "Set on/off to enable/disable emulating a "
                                             "guest CPU which implements the ARM "
                                             "Virtualization Extensions");
+    object_class_property_add_bool(klass, "secure", virt_get_secure,
+                                    virt_set_secure);
+    object_class_property_set_description(klass, "secure",
+                                            "Set on/off to enable/disable the ARM "
+                                            "Security Extensions (TrustZone)");
 }
 
 static void sigi_virt_init(Object *obj)
