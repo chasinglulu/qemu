@@ -38,6 +38,7 @@
 #include "hw/register.h"
 #include "hw/usb/hcd-dwc3.h"
 #include "hw/i2c//dwapb_i2c.h"
+#include "hw/misc/hobot-sigi-pmu.h"
 
 #define TYPE_SIGI_VIRT "sigi-virt"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
@@ -83,10 +84,12 @@ enum {
     VIRT_PCIE_MMIO_HIGH,
     VIRT_L2SRAM,
     VIRT_I2C,
+    VIRT_PMU,
     VIRT_LOWMEMMAP_LAST,
 };
 
 static const MemMapEntry base_memmap[] = {
+    [VIRT_PMU] =                { 0x23190000, 0x00010000 },
     [VIRT_GIC_ITS] =            { 0x30290000, 0x00010000 },
     /* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
     [VIRT_GIC_DIST] =           { 0x30B00000, 0x00010000 },
@@ -139,6 +142,8 @@ struct SigiVirt {
         GICv3State gic;
         GICv3ITSState its;
     } apu;
+
+    SIGIPMUState pmu;
 
     MemoryRegion mr_non_interleave_ddr;
     MemoryRegion mr_interleave_ddr;

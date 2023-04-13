@@ -501,6 +501,11 @@ static void create_ddr_memmap(SigiVirt *s, int virt_mem)
     memory_region_add_subregion(sysmem, base, &s->mr_non_interleave_ddr);
     memory_region_add_subregion(sysmem, interleave_base, &s->mr_interleave_ddr);
     g_free(name);
+
+    /* Create the On Chip Memory (L2SRAM).  */
+    memory_region_init_ram(&s->mr_l2sram, OBJECT(s), "l2sram",
+                           base_memmap[VIRT_L2SRAM].base, &error_fatal);
+    memory_region_add_subregion_overlap(sysmem, base_memmap[VIRT_L2SRAM].base, &s->mr_l2sram, 0);
 }
 
 static void create_unimp(SigiVirt *s)
@@ -508,10 +513,27 @@ static void create_unimp(SigiVirt *s)
     create_unimplemented_device("peri-sysreg", 0x39010000, 0x10000);
 }
 
+static void create_pmu(SigiVirt *s, int pmu)
+{
+    MemoryRegion *sysmem = get_system_memory();
+    hwaddr base = base_memmap[pmu].base;
+    DeviceState *dev;
+    MemoryRegion *mr;
+
+    object_initialize_child(OBJECT(s), "pmu", &s->pmu, TYPE_SIGI_PMU);
+
+    dev = DEVICE(&s->pmu);
+    object_property_set_link(OBJECT(dev), "shared-ocm", OBJECT(&s->mr_l2sram),
+                                    &error_abort);
+
+    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+    memory_region_add_subregion(sysmem, base, mr);
+}
+
 static void sigi_virt_realize(DeviceState *dev, Error **errp)
 {
     SigiVirt *s = SIGI_VIRT(dev);
-    MemoryRegion *sysmem = get_system_memory();
     int i;
 
     create_apu(s);
@@ -524,6 +546,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_usb(s, VIRT_DWC_USB);
     create_i2c(s, VIRT_I2C);
     create_ddr_memmap(s, VIRT_MEM);
+    create_pmu(s, VIRT_PMU);
     create_unimp(s);
 
     for (i = 0; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
@@ -533,11 +556,6 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
         }
         create_sd_card(&s->apu.peri.mmc[i], i);
     }
-
-    /* Create the On Chip Memory (L2SRAM).  */
-    memory_region_init_ram(&s->mr_l2sram, OBJECT(s), "l2sram",
-                           base_memmap[VIRT_L2SRAM].base, &error_fatal);
-    memory_region_add_subregion_overlap(sysmem, base_memmap[VIRT_L2SRAM].base, &s->mr_l2sram, 0);
 }
 
 static Property sigi_virt_properties[] = {
