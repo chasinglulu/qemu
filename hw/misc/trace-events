@@ -274,3 +274,8 @@ virt_ctrl_instance_init(void *dev) "ctrl: %p"
 lasi_chip_mem_valid(uint64_t addr, uint32_t val) "access to addr 0x%"PRIx64" is %d"
 lasi_chip_read(uint64_t addr, uint32_t val) "addr 0x%"PRIx64" val 0x%08x"
 lasi_chip_write(uint64_t addr, uint32_t val) "addr 0x%"PRIx64" val 0x%08x"
+
+# hobot-sigi-pmu.c
+sigi_pmu_read(uint64_t offset, uint64_t data, unsigned size) "read offset 0x%" PRIx64 " data 0x%" PRIx64 " size %" PRIu32
+sigi_pmu_write(uint64_t offset, uint64_t data, unsigned size) "write offset 0x%" PRIx64 " data 0x%" PRIx64 " size %" PRIu32
+sigi_update_state(uint32_t cpu_idx, uint64_t entry) "cpu_idx 0x%" PRIx32 " entry 0x%" PRIx64
