@@ -49,7 +49,6 @@ OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
 #define SIGI_VIRT_NR_UARTS      4
 #define SIGI_VIRT_NR_SDHCI      2
 #define SIGI_VIRT_NR_GPIO       2
-#define SIGI_VIRT_NR_GEMS       2
 #define SIGI_VIRT_NR_I2C        4
 #define SIGI_VIRT_NUM_IRQS      960
 
@@ -132,7 +131,6 @@ struct SigiVirt {
             SerialMM uarts[SIGI_VIRT_NR_UARTS];
             CadenceSDHCIState mmc[SIGI_VIRT_NR_SDHCI];
             DWAPBGPIOState gpio[SIGI_VIRT_NR_GPIO];
-            CadenceGEMState gem[SIGI_VIRT_NR_GEMS];
             DWAPBI2CState i2c[SIGI_VIRT_NR_I2C];
             GPEXHost pcie;
             USBDWC3 usb;
