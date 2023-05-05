@@ -589,6 +589,23 @@ static void fdt_add_sdhci_nodes(const HobotVersalVirt *vms, int sdhci)
     }
 }
 
+static void fdt_add_flash_node(const HobotVersalVirt *vms, int flash)
+{
+    hwaddr flashsize = base_memmap[flash].size / 2;
+    hwaddr flashbase = base_memmap[flash].base;
+    char *nodename;
+
+    /* Report both flash devices as a single node in the DT */
+    nodename = g_strdup_printf("/soc/flash@%" PRIx64, flashbase);
+    qemu_fdt_add_subnode(vms->fdt, nodename);
+    qemu_fdt_setprop_string(vms->fdt, nodename, "compatible", "cfi-flash");
+    qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
+                                    2, flashbase, 2, flashsize,
+                                    2, flashbase + flashsize, 2, flashsize);
+    qemu_fdt_setprop_cell(vms->fdt, nodename, "bank-width", 4);
+    g_free(nodename);
+}
+
 static void fdt_add_uart_nodes(const HobotVersalVirt *vms, int uart)
 {
     char *nodename;
@@ -695,6 +712,7 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     fdt_add_pcie_node(vms, VIRT_PCIE_ECAM);
     fdt_add_usb_nodes(vms);
     fdt_add_sdhci_nodes(vms, VIRT_SDHCI);
+    fdt_add_flash_node(vms, VIRT_FLASH);
     fdt_add_aliases_nodes(vms);
 
     vms->bootinfo.ram_size = machine->ram_size;
@@ -733,6 +751,8 @@ static void hobot_versal_virt_mach_class_init(ObjectClass *oc, void *data)
     mc->default_cpus = SIGI_VIRT_NR_ACPUS;
     mc->no_cdrom = 1;
     mc->no_sdcard = 1;
+    mc->no_floppy = 1;
+    mc->block_default_type = IF_EMMC;
     mc->default_ram_id = "sigi-virt.ddr";
 
     object_class_property_add_bool(oc, "emmc", NULL,
