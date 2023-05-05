@@ -39,6 +39,7 @@
 #include "hw/usb/hcd-dwc3.h"
 #include "hw/i2c//dwapb_i2c.h"
 #include "hw/misc/hobot-sigi-pmu.h"
+#include "hw/block/flash.h"
 
 #define TYPE_SIGI_VIRT "sigi-virt"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
@@ -67,6 +68,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
 
 enum {
     VIRT_MEM,
+    VIRT_FLASH,
     VIRT_INTERLEVEL_MEM,
     VIRT_GIC_DIST,
     VIRT_GIC_ITS,
@@ -88,6 +90,7 @@ enum {
 };
 
 static const MemMapEntry base_memmap[] = {
+    [VIRT_FLASH] =              { 0x18000000, 0x08000000 },
     [VIRT_PMU] =                { 0x23190000, 0x00010000 },
     [VIRT_GIC_ITS] =            { 0x30290000, 0x00010000 },
     /* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
@@ -142,6 +145,7 @@ struct SigiVirt {
     } apu;
 
     SIGIPMUState pmu;
+    PFlashCFI01 *flash[2];
 
     MemoryRegion mr_non_interleave_ddr;
     MemoryRegion mr_interleave_ddr;
