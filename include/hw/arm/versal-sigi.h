@@ -45,7 +45,7 @@
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
 
 #define SIGI_VIRT_CLUSTER_SIZE  4
-#define SIGI_VIRT_NR_ACPUS      4
+#define SIGI_VIRT_NR_ACPUS      6
 #define SIGI_VIRT_NR_RCPUS      4
 #define SIGI_VIRT_NR_UARTS      4
 #define SIGI_VIRT_NR_SDHCI      2
