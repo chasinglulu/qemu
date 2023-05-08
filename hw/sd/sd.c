@@ -1460,6 +1460,9 @@ static sd_rsp_type_t sd_normal_command(SDState *sd, SDRequest req)
             sd->state = sd_transfer_state;
             return sd_r1b;
 
+        case sd_transfer_state:
+            return sd_r1;
+
         default:
             break;
         }
@@ -1523,6 +1526,17 @@ static sd_rsp_type_t sd_normal_command(SDState *sd, SDRequest req)
             sd->state = sd_sendingdata_state;
             sd->data_start = addr;
             sd->data_offset = 0;
+            return sd_r1;
+
+        default:
+            break;
+        }
+        break;
+
+    case 23:    /* CMD23: SET_BLOCK_COUNT */
+        switch (sd->state) {
+        case sd_transfer_state:
+            sd->multi_blk_cnt = req.arg;
             return sd_r1;
 
         default:
@@ -2295,6 +2309,7 @@ uint8_t sd_read_byte(SDState *sd)
                 }
             }
         }
+        sd->state = sd_sendingdata_state;
         break;
 
     case 19:    /* CMD19:  SEND_TUNING_BLOCK (SD) */

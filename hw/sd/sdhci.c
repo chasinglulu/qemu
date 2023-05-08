@@ -1211,6 +1211,36 @@ sdhci_write(void *opaque, hwaddr offset, uint64_t val, unsigned size)
             break;
         }
 
+        /*
+         * In Linux Kernel, the MMC core does not send the STOP_TRANSMISSION command
+         * after initiating WRITE_MULTIPLE_BLOCK command. Instead, it directly issues
+         * the SEND_STATUS command to poll the status of eMMC.
+         *
+         * In the QEMU eMMC emulation, after executing WRITE_MULTIPLE_BLOCK command,
+         * the eMMC state will switch from sd_receivingdata_state to sd_transfer_state
+         * when multi_blk_cnt becomes zero or when it receives the STOP_TRANSMISSION command.
+         *
+         * To prevent the kernel from thinking that eMMC is always in a busy state
+         * when mounting the ext4 file system, the CMD23 command is issued to set
+         * multi_blk_cnt. After completing multiple block writes, multi_blk_cnt becomes zero.
+         * The eMMC automatically change the state from sd_receivingdata_state to
+         * sd_transfer_state, so that the kernel will not report a "Card stuck being busy" error.
+         *
+         */
+        if ((s->cmdreg >> 8) == 0x19 && s->blkcnt >= 1)
+        {
+            uint32_t tmp = s->argument;
+
+            /* Issue CMD23: SET_BLOCK_COUNT command into eMMC or sdcard */
+            s->cmdreg = 0x1700;
+            s->argument = s->blkcnt;
+            sdhci_send_command(s);
+
+            /* restore the original value */
+            MASKED_WRITE(s->cmdreg, mask >> 16, value >> 16);
+            s->argument = tmp;
+        }
+
         sdhci_send_command(s);
         break;
     case  SDHC_BDATA:
