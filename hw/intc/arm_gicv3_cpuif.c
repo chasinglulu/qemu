@@ -2791,7 +2791,7 @@ void gicv3_init_cpuif(GICv3State *s)
     int i;
 
     for (i = 0; i < s->num_cpu; i++) {
-        ARMCPU *cpu = ARM_CPU(qemu_get_cpu(i));
+        ARMCPU *cpu = ARM_CPU(qemu_get_cpu(i + s->cpu_idx_off));
         GICv3CPUState *cs = &s->cpu[i];
 
         /*
