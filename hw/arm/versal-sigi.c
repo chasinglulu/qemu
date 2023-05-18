@@ -582,6 +582,12 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
         }
         create_sd_card(&s->apu.peri.mmc[i], i);
     }
+
+    /* Map legacy -drive if=pflash to machine properties */
+    for (i = 0; i < ARRAY_SIZE(s->flash); i++) {
+        pflash_cfi01_legacy_drive(s->flash[i],
+                                  drive_get(IF_PFLASH, 0, i));
+    }
 }
 
 static Property sigi_virt_properties[] = {
