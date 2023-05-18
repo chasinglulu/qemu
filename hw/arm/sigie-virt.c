@@ -489,6 +489,7 @@ static void create_flash_memmap(SigiEVirt *s)
 static void sigi_virt_realize(DeviceState *dev, Error **errp)
 {
     SigiEVirt *s = SIGIE_VIRT(dev);
+    int i;
 
     create_apu(s);
     create_gic(s);
@@ -506,6 +507,12 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
         create_emmc_card(s->apu.peri.mmc, 0);
     else
         create_sd_card(s->apu.peri.mmc, 0);
+
+    /* Map legacy -drive if=pflash to machine properties */
+    for (i = 0; i < ARRAY_SIZE(s->flash); i++) {
+        pflash_cfi01_legacy_drive(s->flash[i],
+                                  drive_get(IF_PFLASH, 0, i));
+    }
 }
 
 static Property sigi_virt_properties[] = {
