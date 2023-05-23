@@ -572,7 +572,6 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_ddr_memmap(s, VIRT_MEM);
     create_pmu(s, VIRT_PMU);
     create_cfi_flash(s);
-    create_flash_memmap(s);
     create_unimp(s);
 
     for (i = 0; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
@@ -588,6 +587,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
         pflash_cfi01_legacy_drive(s->flash[i],
                                   drive_get(IF_PFLASH, 0, i));
     }
+    create_flash_memmap(s);
 }
 
 static Property sigi_virt_properties[] = {

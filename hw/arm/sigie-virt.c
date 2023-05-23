@@ -500,7 +500,6 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     create_usb(s, VIRT_DWC_USB);
     create_ddr_memmap(s);
     create_cfi_flash(s);
-    create_flash_memmap(s);
     create_unimp(s);
 
     if (s->cfg.has_emmc)
@@ -513,6 +512,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
         pflash_cfi01_legacy_drive(s->flash[i],
                                   drive_get(IF_PFLASH, 0, i));
     }
+    create_flash_memmap(s);
 }
 
 static Property sigi_virt_properties[] = {
