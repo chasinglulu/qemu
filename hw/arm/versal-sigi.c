@@ -463,8 +463,13 @@ static void create_ddr_memmap(SigiVirt *s, int virt_mem)
 
     /* Create the On Chip Memory (L2SRAM).  */
     memory_region_init_ram(&s->mr_l2sram, OBJECT(s), "l2sram",
-                           base_memmap[VIRT_L2SRAM].base, &error_fatal);
+                           base_memmap[VIRT_L2SRAM].size, &error_fatal);
     memory_region_add_subregion_overlap(sysmem, base_memmap[VIRT_L2SRAM].base, &s->mr_l2sram, 0);
+
+    /* Create Low DDR memory. */
+    memory_region_init_ram(&s->mr_low_ddr, OBJECT(s), "low_ddr",
+                           base_memmap[VIRT_LOW_MEM].size, &error_fatal);
+    memory_region_add_subregion_overlap(sysmem, base_memmap[VIRT_LOW_MEM].base, &s->mr_low_ddr, 0);
 }
 
 static void create_unimp(SigiVirt *s)

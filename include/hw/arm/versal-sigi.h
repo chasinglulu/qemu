@@ -70,6 +70,7 @@ enum {
     VIRT_MEM,
     VIRT_FLASH,
     VIRT_INTERLEVEL_MEM,
+    VIRT_LOW_MEM,
     VIRT_GIC_DIST,
     VIRT_GIC_ITS,
     VIRT_GIC_REDIST,
@@ -110,6 +111,7 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_USB_CTRL] =           { 0x3A000000, 0x00010000 },
     [VIRT_DWC_USB] =            { 0x3A820000, 0x00010000 },
     [VIRT_L2SRAM] =             { 0x04000000, 0x02000000 },
+    [VIRT_LOW_MEM] =            { 0xC0000000, 0x40000000 },
     [VIRT_MEM] =                { 0x3000000000UL, DDR_SIZE },
     [VIRT_INTERLEVEL_MEM] =     { 0x1000000000UL, DDR_SIZE },
 };
@@ -149,6 +151,7 @@ struct SigiVirt {
 
     MemoryRegion mr_non_interleave_ddr;
     MemoryRegion mr_interleave_ddr;
+    MemoryRegion mr_low_ddr;
     MemoryRegion mr_l2sram;
 
     struct {

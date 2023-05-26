@@ -659,6 +659,92 @@ static void *hobot_versal_virt_dtb(const struct arm_boot_info *binfo, int *fdt_s
     return board->fdt;
 }
 
+static void fdt_nop_memory_nodes(void *fdt, Error **errp)
+{
+    Error *err = NULL;
+    char **node_path;
+    int n = 0;
+
+    node_path = qemu_fdt_node_unit_path(fdt, "memory", &err);
+    if (err) {
+        error_propagate(errp, err);
+        return;
+    }
+    while (node_path[n]) {
+        if (g_str_has_prefix(node_path[n], "/memory")) {
+            qemu_fdt_nop_node(fdt, node_path[n]);
+        }
+        n++;
+    }
+    g_strfreev(node_path);
+}
+
+static void fdt_add_memory_nodes(HobotVersalVirt *s, void *fdt, uint64_t ram_size)
+{
+    /* Describes the various split DDR access regions.  */
+    static struct {
+        uint64_t base;
+        uint64_t size;
+    } addr_ranges[2];
+    uint64_t mem_reg_prop[4] = {0};
+    uint64_t size = ram_size;
+    uint64_t mapsize;
+    Error *err = NULL;
+    char *name;
+    int i;
+
+    addr_ranges[0].base = base_memmap[VIRT_MEM].base;
+    addr_ranges[0].size = base_memmap[VIRT_MEM].size;
+    addr_ranges[1].base = base_memmap[VIRT_LOW_MEM].base;
+    addr_ranges[1].size = base_memmap[VIRT_LOW_MEM].size;
+
+    fdt_nop_memory_nodes(fdt, &err);
+    if (err) {
+        error_report_err(err);
+        return;
+    }
+
+    name = g_strdup_printf("/memory@%lx", base_memmap[VIRT_LOW_MEM].base);
+
+    mapsize = size < addr_ranges[0].size ? size : addr_ranges[0].size;
+
+    mem_reg_prop[0] = addr_ranges[0].base;
+    mem_reg_prop[1] = mapsize;
+    size -= mapsize;
+    mem_reg_prop[2] = addr_ranges[1].base;
+    mem_reg_prop[3] = addr_ranges[1].size;
+    i = ARRAY_SIZE(addr_ranges);
+
+    qemu_fdt_add_subnode(fdt, name);
+    qemu_fdt_setprop_string(fdt, name, "device_type", "memory");
+
+    switch (i) {
+    case 1:
+        qemu_fdt_setprop_sized_cells(fdt, name, "reg",
+                                     2, mem_reg_prop[0],
+                                     2, mem_reg_prop[1]);
+        break;
+    case 2:
+        qemu_fdt_setprop_sized_cells(fdt, name, "reg",
+                                     2, mem_reg_prop[0],
+                                     2, mem_reg_prop[1],
+                                     2, mem_reg_prop[2],
+                                     2, mem_reg_prop[3]);
+        break;
+    default:
+        g_assert_not_reached();
+    }
+    g_free(name);
+}
+
+static void hobot_versal_virt_modify_dtb(const struct arm_boot_info *binfo,
+                                    void *fdt)
+{
+    HobotVersalVirt *s = container_of(binfo, HobotVersalVirt, bootinfo);
+
+    fdt_add_memory_nodes(s, fdt, binfo->ram_size);
+}
+
 static void hobot_versal_virt_mach_done(Notifier *notifier, void *data)
 {
     HobotVersalVirt *vms = container_of(notifier, HobotVersalVirt,
@@ -719,6 +805,7 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
     vms->bootinfo.board_id = -1;
     vms->bootinfo.loader_start = base_memmap[VIRT_MEM].base;
     vms->bootinfo.get_dtb = hobot_versal_virt_dtb;
+    vms->bootinfo.modify_dtb = hobot_versal_virt_modify_dtb;
     vms->bootinfo.skip_dtb_autoload = true;
     vms->bootinfo.psci_conduit = vms->psci_conduit;
     arm_load_kernel(ARM_CPU(first_cpu), machine, &vms->bootinfo);
