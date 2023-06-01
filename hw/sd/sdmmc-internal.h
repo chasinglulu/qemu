@@ -135,7 +135,7 @@ const char *sd_acmd_name(uint8_t cmd);
 #define EXT_CSD_PART_CONFIG_EN_MASK     (0x7 << 3)
 #define EXT_CSD_PART_CONFIG_EN_BOOT0    (0x1 << 3)
 #define EXT_CSD_PART_CONFIG_EN_BOOT1    (0x2 << 3)
-#define EXT_CSD_PART_CONFIG_EN_RPMB     (0x3 << 3)
+#define EXT_CSD_PART_CONFIG_EN_RPMB     (0x4 << 3)
 #define EXT_CSD_PART_CONFIG_EN_USER     (0x7 << 3)
 
 #endif

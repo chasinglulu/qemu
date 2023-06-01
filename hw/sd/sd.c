@@ -410,11 +410,22 @@ static const uint8_t sd_csd_rw_mask[16] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfc, 0xfe,
 };
 
+static inline bool sd_boot_partition_enabled(SDState *sd)
+{
+    return (sd->boot_config & EXT_CSD_PART_CONFIG_EN_BOOT0 ||
+            sd->boot_config & EXT_CSD_PART_CONFIG_EN_BOOT1) ? true : false;
+}
+
+static inline bool sd_rpmb_partition_enabled(SDState *sd)
+{
+    return (sd->boot_config & EXT_CSD_PART_CONFIG_EN_RPMB) ? true : false;
+}
+
 static void mmc_set_ext_csd(SDState *sd, uint64_t size)
 {
     uint32_t sectcount = size >> HWBLOCK_SHIFT;
-    bool boot_enable = sd->boot_config & EXT_CSD_PART_CONFIG_EN_MASK;
-    bool rpmb_enable = sd->boot_config & EXT_CSD_PART_CONFIG_ACC_RPMB;
+    bool boot_enable = sd_boot_partition_enabled(sd);
+    bool rpmb_enable = sd_rpmb_partition_enabled(sd);
 
     memset(sd->ext_csd, 0, sizeof(sd->ext_csd));
 
@@ -667,19 +678,26 @@ static inline uint64_t sd_addr_to_wpnum(uint64_t addr)
     return addr >> (HWBLOCK_SHIFT + SECTOR_SHIFT + WPGROUP_SHIFT);
 }
 
-
 static unsigned sd_boot_capacity_bytes(SDState *sd)
 {
-    unsigned int enable = sd->ext_csd[EXT_CSD_PART_CONFIG] &
-         EXT_CSD_PART_CONFIG_EN_MASK;
+    unsigned int enable = sd_boot_partition_enabled(sd);
 
     return enable ? sd->ext_csd[EXT_CSD_BOOT_MULT] << 17 : 0;
+}
+
+static unsigned sd_rpmb_capacity_bytes(SDState *sd)
+{
+    unsigned int enable = sd_rpmb_partition_enabled(sd);
+
+    return enable ? sd->ext_csd[EXT_CSD_RPMB_MULT] << 17 : 0;
 }
 
 static void sd_reset(DeviceState *dev)
 {
     SDState *sd = SD_CARD(dev);
     SDCardClass *sc = SD_CARD_GET_CLASS(sd);
+    uint64_t boot_capacity = sd_boot_capacity_bytes(sd);
+    uint64_t rpmb_capacity = sd_rpmb_capacity_bytes(sd);
     uint64_t size;
     uint64_t sect;
 
@@ -691,9 +709,8 @@ static void sd_reset(DeviceState *dev)
     }
     size = sect << 9;
 
-    if (sc->bootpart_offset) {
-        size -= sd_boot_capacity_bytes(sd) * 2;
-    }
+    if (sc->userdata_offset)
+        size -= (2 * boot_capacity + rpmb_capacity);
 
     sect = sd_addr_to_wpnum(size) + 1;
 
@@ -880,45 +897,49 @@ void sd_set_cb(SDState *sd, qemu_irq readonly, qemu_irq insert)
 }
 
 /*
- * This requires a disk image that has two boot partitions inserted at the
- * beginning of it. The size of the boot partitions are configured in the
- * ext_csd structure, which is hardcoded in qemu. They are currently set to
+ * This requires a disk image that has two boot partitions or one rpmb partition
+ * inserted at the beginning of it. The size of the boot partitions are configured
+ * in the ext_csd structure, which is hardcoded in qemu. They are currently set to
  * 1MB each.
  */
-static uint32_t sd_emmc_bootpart_offset(SDState *sd)
+static uint32_t sd_emmc_userdata_offset(SDState *sd)
 {
-    unsigned int access = sd->ext_csd[EXT_CSD_PART_CONFIG] &
-        EXT_CSD_PART_CONFIG_ACC_MASK;
-    unsigned int enable = sd->ext_csd[EXT_CSD_PART_CONFIG] &
-         EXT_CSD_PART_CONFIG_EN_MASK;
     unsigned int boot_capacity = sd_boot_capacity_bytes(sd);
+    unsigned int rpmb_capacity = sd_rpmb_capacity_bytes(sd);
 
-    if (!enable) {
-        return 0;
-    }
-
-    switch (access) {
-    case EXT_CSD_PART_CONFIG_ACC_DEFAULT:
-        return boot_capacity * 2;
-    case EXT_CSD_PART_CONFIG_ACC_BOOT0:
-        return 0;
-    case EXT_CSD_PART_CONFIG_ACC_BOOT0 + 1:
-        return boot_capacity * 1;
-    default:
-         g_assert_not_reached();
-    }
+    return (2 * boot_capacity + rpmb_capacity);
 }
 
-static uint32_t sd_bootpart_offset(SDState *sd)
+static uint32_t sd_userdata_offset(SDState *sd)
 {
     SDCardClass *sc = SD_CARD_GET_CLASS(sd);
-    return sc->bootpart_offset ? sc->bootpart_offset(sd) : 0;
+    return sc->userdata_offset ? sc->userdata_offset(sd) : 0;
 }
 
 static void sd_blk_read(SDState *sd, uint64_t addr, uint32_t len)
 {
+    unsigned int access = sd->ext_csd[EXT_CSD_PART_CONFIG] &
+        EXT_CSD_PART_CONFIG_ACC_MASK;
+    uint64_t boot_capacity = sd_boot_capacity_bytes(sd);
+
     trace_sdcard_read_block(addr, len);
-    addr += sd_bootpart_offset(sd);
+
+    switch (access) {
+    case EXT_CSD_PART_CONFIG_ACC_DEFAULT:
+        addr += sd_userdata_offset(sd);
+        break;
+    case EXT_CSD_PART_CONFIG_ACC_BOOT0:
+        break;
+    case EXT_CSD_PART_CONFIG_ACC_BOOT1:
+        addr += boot_capacity;
+        break;
+    case EXT_CSD_PART_CONFIG_ACC_RPMB:
+        addr += 2 * boot_capacity;
+        break;
+    default:
+        g_assert_not_reached();
+    }
+
     if (!sd->blk || blk_pread(sd->blk, addr, len, sd->data, 0) < 0) {
         fprintf(stderr, "sd_blk_read: read error on host side\n");
     }
@@ -926,8 +947,27 @@ static void sd_blk_read(SDState *sd, uint64_t addr, uint32_t len)
 
 static void sd_blk_write(SDState *sd, uint64_t addr, uint32_t len)
 {
+    unsigned int access = sd->ext_csd[EXT_CSD_PART_CONFIG] &
+        EXT_CSD_PART_CONFIG_ACC_MASK;
+    uint64_t boot_capacity = sd_boot_capacity_bytes(sd);
+
     trace_sdcard_write_block(addr, len);
-    addr += sd_bootpart_offset(sd);
+
+    switch (access) {
+    case EXT_CSD_PART_CONFIG_ACC_DEFAULT:
+        addr += sd_userdata_offset(sd);
+        break;
+    case EXT_CSD_PART_CONFIG_ACC_BOOT0:
+        break;
+    case EXT_CSD_PART_CONFIG_ACC_BOOT1:
+        addr += boot_capacity;
+        break;
+    case EXT_CSD_PART_CONFIG_ACC_RPMB:
+        addr += 2 * boot_capacity;
+        break;
+    default:
+        g_assert_not_reached();
+    }
     if (!sd->blk || blk_pwrite(sd->blk, addr, len, sd->data, 0) < 0) {
         fprintf(stderr, "sd_blk_write: write error on host side\n");
     }
@@ -2649,7 +2689,7 @@ static void emmc_class_init(ObjectClass *klass, void *data)
     dc->realize = emmc_realize;
     sc->proto = &sd_proto_emmc;
     sc->set_csd = sd_emmc_set_csd;
-    sc->bootpart_offset = sd_emmc_bootpart_offset;
+    sc->userdata_offset = sd_emmc_userdata_offset;
 }
 
 static const TypeInfo emmc_info = {

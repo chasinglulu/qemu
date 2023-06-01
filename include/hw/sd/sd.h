@@ -130,7 +130,7 @@ struct SDCardClass {
 
     const struct SDProto *proto;
     void (*set_csd)(SDState *sd, uint64_t size);
-    uint32_t (*bootpart_offset)(SDState *sd);
+    uint32_t (*userdata_offset)(SDState *sd);
 };
 
 #define TYPE_SD_BUS "sd-bus"
