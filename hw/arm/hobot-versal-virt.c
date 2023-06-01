@@ -30,6 +30,7 @@
 #include "qom/object.h"
 #include "sysemu/sysemu.h"
 #include "qemu/log.h"
+#include "qapi/visitor.h"
 
 #define TYPE_HOBOT_VERSAL_VIRT_MACHINE MACHINE_TYPE_NAME("hobot-sigi-virt")
 OBJECT_DECLARE_SIMPLE_TYPE(HobotVersalVirt, HOBOT_VERSAL_VIRT_MACHINE)
@@ -52,6 +53,7 @@ struct HobotVersalVirt {
         bool virt;
         bool secure;
         bool has_emmc;
+        uint8_t part_config;
     } cfg;
 };
 
@@ -60,6 +62,23 @@ static void hobot_versal_virt_set_emmc(Object *obj, bool value, Error **errp)
     HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(obj);
 
     s->cfg.has_emmc = value;
+}
+
+static void hobot_versal_virt_set_part_config(Object *obj, Visitor *v,
+                                    const char *name, void *opaque,
+                                    Error **errp)
+{
+    HobotVersalVirt *s = HOBOT_VERSAL_VIRT_MACHINE(obj);
+    Error *error = NULL;
+    uint8_t value;
+
+    visit_type_uint8(v, name, &value, &error);
+    if (error) {
+        error_propagate(errp, error);
+        return;
+    }
+
+    s->cfg.part_config = value;
 }
 
 static void hobot_versal_virt_set_virt(Object *obj, bool value, Error **errp)
@@ -777,6 +796,10 @@ static void hobot_versal_virt_mach_init(MachineState *machine)
         object_property_set_bool(OBJECT(&vms->soc), "has-emmc",
                                 vms->cfg.has_emmc, &error_abort);
 
+    if (vms->cfg.part_config)
+        object_property_set_uint(OBJECT(&vms->soc), "part-config",
+                          vms->cfg.part_config, &error_abort);
+
     if (vms->cfg.virt)
         object_property_set_bool(OBJECT(&vms->soc), "virtualization",
                                 vms->cfg.virt, &error_abort);
@@ -848,6 +871,9 @@ static void hobot_versal_virt_mach_class_init(ObjectClass *oc, void *data)
 		            hobot_versal_virt_set_virt);
     object_class_property_add_bool(oc, "secure", NULL,
 		            hobot_versal_virt_set_secure);
+    object_class_property_add(oc, "part-config", "uint8",
+        NULL, hobot_versal_virt_set_part_config,
+        NULL, NULL);
 }
 
 static const TypeInfo hobot_versal_virt_mach_info = {

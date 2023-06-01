@@ -155,7 +155,7 @@ static void create_usb(SigiVirt *s, int usb)
                             qdev_get_gpio_in(gicdev, irq));
 }
 
-static void create_emmc_card(CadenceSDHCIState *cdns, int index)
+static void create_emmc_card(SigiVirt *s, CadenceSDHCIState *cdns, int index)
 {
     DriveInfo *di = drive_get(IF_EMMC, 0, index);
     BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
@@ -165,7 +165,7 @@ static void create_emmc_card(CadenceSDHCIState *cdns, int index)
     emmc->id = g_strdup_printf("emmc%d", index);
     object_property_add_child(OBJECT(cdns), "emmc[*]", OBJECT(emmc));
     object_property_set_uint(OBJECT(emmc), "spec_version", 3, &error_fatal);
-    object_property_set_uint(OBJECT(emmc), "boot-config", 0, &error_fatal);
+    object_property_set_uint(OBJECT(emmc), "boot-config", s->cfg.part_config, &error_fatal);
     qdev_prop_set_drive_err(emmc, "drive", blk, &error_fatal);
     qdev_realize_and_unref(emmc, cdns->bus, &error_fatal);
 }
@@ -581,7 +581,7 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
 
     for (i = 0; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
         if (s->cfg.has_emmc && i == 0) {
-            create_emmc_card(&s->apu.peri.mmc[i], i);
+            create_emmc_card(s, &s->apu.peri.mmc[i], i);
             continue;
         }
         create_sd_card(&s->apu.peri.mmc[i], i);
@@ -599,6 +599,7 @@ static Property sigi_virt_properties[] = {
     DEFINE_PROP_LINK("sigi-virt.ddr", SigiVirt, cfg.mr_ddr, TYPE_MEMORY_REGION,
                      MemoryRegion *),
     DEFINE_PROP_BOOL("has-emmc", SigiVirt, cfg.has_emmc, false),
+    DEFINE_PROP_UINT8("part-config", SigiVirt, cfg.part_config, 0x0),
     DEFINE_PROP_END_OF_LIST()
 };
 

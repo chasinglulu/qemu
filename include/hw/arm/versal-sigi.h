@@ -159,6 +159,7 @@ struct SigiVirt {
         bool has_emmc;
         bool virt;
         bool secure;
+        uint8_t part_config;
     } cfg;
 };
 
