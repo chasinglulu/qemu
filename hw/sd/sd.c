@@ -413,6 +413,8 @@ static const uint8_t sd_csd_rw_mask[16] = {
 static void mmc_set_ext_csd(SDState *sd, uint64_t size)
 {
     uint32_t sectcount = size >> HWBLOCK_SHIFT;
+    bool boot_enable = sd->boot_config & EXT_CSD_PART_CONFIG_EN_MASK;
+    bool rpmb_enable = sd->boot_config & EXT_CSD_PART_CONFIG_ACC_RPMB;
 
     memset(sd->ext_csd, 0, sizeof(sd->ext_csd));
 
@@ -425,9 +427,9 @@ static void mmc_set_ext_csd(SDState *sd, uint64_t size)
     sd->ext_csd[EXT_CSD_SEC_ERASE_MULT] = 0x96; /* Secure erase support */
     sd->ext_csd[EXT_CSD_SEC_TRIM_MULT] = 0x96; /* Secure TRIM multiplier */
     sd->ext_csd[EXT_CSD_BOOT_INFO] = 0x7; /* Boot information */
-    sd->ext_csd[EXT_CSD_BOOT_MULT] = 0x8; /* Boot partition size. 128KB unit */
+    sd->ext_csd[EXT_CSD_BOOT_MULT] = boot_enable ? 0x10 : 0; /* Boot partition size. 128KB unit */
     sd->ext_csd[EXT_CSD_ACC_SIZE] = 0x6; /* Access size */
-    sd->ext_csd[EXT_CSD_HC_ERASE_GRP_SIZE] = 0x4; /* HC Erase unit size */
+    sd->ext_csd[EXT_CSD_HC_ERASE_GRP_SIZE] = 0x1; /* HC Erase unit size */
     sd->ext_csd[EXT_CSD_ERASE_TIMEOUT_MULT] = 0x1; /* HC erase timeout */
     sd->ext_csd[EXT_CSD_REL_WR_SEC_C] = 0x1; /* Reliable write sector count */
     sd->ext_csd[EXT_CSD_HC_WP_GRP_SIZE] = 0x4; /* HC write protect group size */
@@ -449,7 +451,8 @@ static void mmc_set_ext_csd(SDState *sd, uint64_t size)
     sd->ext_csd[EXT_CSD_CARD_TYPE] = 0x7;
     sd->ext_csd[EXT_CSD_STRUCTURE] = 0x2;
     sd->ext_csd[EXT_CSD_REV] = 0x5;
-    sd->ext_csd[EXT_CSD_RPMB_MULT] = 0x1; /* RPMB size */
+    sd->ext_csd[EXT_CSD_ERASE_GROUP_DEF] = 0x1; /* Use high-capacity erase unit size */
+    sd->ext_csd[EXT_CSD_RPMB_MULT] = rpmb_enable ? 0x10 : 0; /* RPMB size */
     sd->ext_csd[EXT_CSD_PARTITION_SUPPORT] = 0x3;
     sd->ext_csd[159] = 0x00; /* Max enhanced area size */
     sd->ext_csd[158] = 0x00; /* ... */
