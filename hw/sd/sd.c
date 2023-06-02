@@ -49,6 +49,7 @@
 #include "qemu/module.h"
 #include "sdmmc-internal.h"
 #include "trace.h"
+#include "hw/sd/rpmb.h"
 
 //#define DEBUG_SD 1
 
@@ -129,6 +130,7 @@ struct SDState {
     uint64_t size;
     uint32_t blk_len;
     uint32_t multi_blk_cnt;
+    bool rpmb_rel_write;
     uint32_t erase_start;
     uint32_t erase_end;
     uint8_t pwd[16];
@@ -921,8 +923,27 @@ static void sd_blk_read(SDState *sd, uint64_t addr, uint32_t len)
     unsigned int access = sd->ext_csd[EXT_CSD_PART_CONFIG] &
         EXT_CSD_PART_CONFIG_ACC_MASK;
     uint64_t boot_capacity = sd_boot_capacity_bytes(sd);
+    struct s_rpmb *rpmb_frame = (struct s_rpmb *)sd->data;
+    uint16_t rpmb_req = rpmb_get_request(rpmb_frame);
+    uint32_t offset = 0;
 
     trace_sdcard_read_block(addr, len);
+
+    if (rpmb_req > 0) {
+        qemu_log("RPMB read request: 0x%x\n", rpmb_req);
+
+        switch (rpmb_req) {
+        case RPMB_REQ_WCOUNTER:
+            offset = offsetof(struct s_rpmb, write_counter);
+            break;
+        case RPMB_REQ_READ_DATA:
+            addr = (rpmb_get_address(rpmb_frame) + 1) * RPMB_SZ_DATA;
+            len = RPMB_SZ_DATA;
+            break;
+        case RPMB_REQ_STATUS:
+            break;
+        }
+    }
 
     switch (access) {
     case EXT_CSD_PART_CONFIG_ACC_DEFAULT:
@@ -950,9 +971,33 @@ static void sd_blk_write(SDState *sd, uint64_t addr, uint32_t len)
     unsigned int access = sd->ext_csd[EXT_CSD_PART_CONFIG] &
         EXT_CSD_PART_CONFIG_ACC_MASK;
     uint64_t boot_capacity = sd_boot_capacity_bytes(sd);
+    struct s_rpmb *rpmb_frame = (struct s_rpmb *)sd->data;
+    uint16_t rpmb_req = rpmb_get_request(rpmb_frame);
+    uint32_t offset = 0;
+
+    if (rpmb_req > 0) {
+        qemu_log_mask(LOG_STRACE, "RPMB write request: 0x%x\n", rpmb_req);
+
+        if (!sd->rpmb_rel_write)
+            return;
+
+        switch (rpmb_req) {
+        case RPMB_REQ_KEY:
+            offset = offsetof(struct s_rpmb, mac);
+            addr = rpmb_get_address(rpmb_frame);
+            len = RPMB_SZ_MAC;
+            break;
+        case RPMB_REQ_WRITE_DATA:
+            offset = offsetof(struct s_rpmb, data);
+            addr = (rpmb_get_address(rpmb_frame) + 1) * RPMB_SZ_DATA;
+            len = RPMB_SZ_DATA;
+            break;
+        }
+
+        sd->rpmb_rel_write = false;
+    }
 
     trace_sdcard_write_block(addr, len);
-
     switch (access) {
     case EXT_CSD_PART_CONFIG_ACC_DEFAULT:
         addr += sd_userdata_offset(sd);
@@ -968,7 +1013,8 @@ static void sd_blk_write(SDState *sd, uint64_t addr, uint32_t len)
     default:
         g_assert_not_reached();
     }
-    if (!sd->blk || blk_pwrite(sd->blk, addr, len, sd->data, 0) < 0) {
+
+    if (!sd->blk || blk_pwrite(sd->blk, addr, len, sd->data + offset, 0) < 0) {
         fprintf(stderr, "sd_blk_write: write error on host side\n");
     }
 }
@@ -1579,6 +1625,8 @@ static sd_rsp_type_t sd_normal_command(SDState *sd, SDRequest req)
     case 23:    /* CMD23: SET_BLOCK_COUNT */
         switch (sd->state) {
         case sd_transfer_state:
+            if (req.arg & BIT(31))
+                sd->rpmb_rel_write = true;
             sd->multi_blk_cnt = req.arg;
             return sd_r1;
 
