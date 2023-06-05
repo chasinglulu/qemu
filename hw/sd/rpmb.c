@@ -8,22 +8,12 @@
 #include "qemu/log.h"
 #include "qemu/cutils.h"
 #include "qemu/bswap.h"
+#include "sysemu/block-backend-io.h"
 
 #define RPMB_DEBUG   1
 
-/* Error messages */
-#if 0
-static const char * const rpmb_err_msg[] = {
-	"",
-	"General failure",
-	"Authentication failure",
-	"Counter failure",
-	"Address failure",
-	"Write failure",
-	"Read failure",
-	"Authentication key not yet programmed",
-};
-#endif
+static struct s_rpmb rpmb_write_frame;
+#define OTP_WRITE_COUNTER_OFFSET    0x30
 
 uint16_t rpmb_get_request(struct s_rpmb *rpmb_frame)
 {
@@ -65,17 +55,69 @@ inline uint16_t rpmb_get_result(struct s_rpmb *rpmb_frame)
 }
 #endif
 
-void rpmb_blk_read(struct s_rpmb *rpmb_frame)
+void rpmb_write(struct s_rpmb *rpmb_frame)
 {
-#ifdef RPMB_DEBUG
-    qemu_hexdump(stderr, "rpmb frame read", rpmb_frame, sizeof(*rpmb_frame));
-#endif
+    memset(&rpmb_write_frame, 0, sizeof(struct s_rpmb));
+
+    memcpy(&rpmb_write_frame, rpmb_frame, sizeof(struct s_rpmb));
 }
 
-uint rpmb_blk_write(struct s_rpmb *rpmb_frame)
+void rpmb_read_status(struct s_rpmb *respones)
 {
-#ifdef RPMB_DEBUG
-    qemu_hexdump(stderr, "rpmb frame write", rpmb_frame, sizeof(*rpmb_frame));
-#endif
-    return 0;
+    uint16_t request = be16_to_cpu(rpmb_write_frame.request);
+
+    switch (request) {
+    case RPMB_REQ_KEY:
+        respones->request = cpu_to_be16(RPMB_RESP_KEY);
+        break;
+    case RPMB_REQ_WRITE_DATA:
+        respones->request = cpu_to_be16(RPMB_RESP_WRITE_DATA);
+        break;
+    }
+
+    respones->result = rpmb_write_frame.result;
+    memset(&rpmb_write_frame, 0, sizeof(rpmb_write_frame));
+}
+
+bool rpmb_check_key(BlockBackend *blk, uint64_t addr)
+{
+    unsigned char key[RPMB_SZ_MAC + 1];
+
+    if (!blk)
+        return false;
+
+    if (blk_pread(blk, addr, RPMB_SZ_MAC + 1, key, 0) < 0) {
+        qemu_log("Read key failed\n");
+        return false;
+    }
+
+    if (key[RPMB_SZ_MAC])
+        return false;
+
+    return true;
+}
+
+void rpmb_set_result(uint16_t err_code)
+{
+    rpmb_write_frame.result = cpu_to_be16(err_code);
+}
+
+void rpmb_read_write_counter(struct s_rpmb *respones, BlockBackend *blk)
+{
+    uint32_t counter;
+
+    respones->request = cpu_to_be16(RPMB_RESP_WCOUNTER);
+
+    if (!blk) {
+        respones->result = cpu_to_be16(RPMB_ERR_GENERAL);
+        return;
+    }
+
+    if (blk_pread(blk, OTP_WRITE_COUNTER_OFFSET, sizeof(counter), &counter, 0) < 0) {
+        qemu_log("Read counter failed\n");
+        respones->result = cpu_to_be16(RPMB_ERR_READ);
+        return;
+    }
+
+    respones->write_counter = cpu_to_be32(counter);
 }
