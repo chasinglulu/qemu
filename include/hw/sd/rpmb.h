@@ -64,6 +64,8 @@ void rpmb_read_status(struct s_rpmb *respones);
 bool rpmb_check_key(BlockBackend *blk, uint64_t addr);
 void rpmb_set_result(uint16_t err_code);
 void rpmb_read_write_counter(struct s_rpmb *respones, BlockBackend *blk);
+void rpmb_read_data(struct s_rpmb *respones, BlockBackend *blk, uint64_t addr, uint32_t boot_cap);
+void rpmb_hmac(struct s_rpmb *resp, BlockBackend *blk, uint64_t addr);
 #if 0
 inline uint16_t rpmb_get_write_counter(struct s_rpmb *rpmb_frame);
 inline uint16_t rpmb_get_result(struct s_rpmb *rpmb_frame);

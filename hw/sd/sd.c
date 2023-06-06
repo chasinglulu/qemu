@@ -931,13 +931,14 @@ static void sd_blk_read(SDState *sd, uint64_t addr, uint32_t len)
         qemu_log("RPMB read request: 0x%x\n", rpmb_req);
 
         memset(&rpmb_response, 0, sizeof(rpmb_response));
+        addr = 2 * boot_capacity;
         switch (rpmb_req) {
         case RPMB_REQ_WCOUNTER:
             rpmb_read_write_counter(&rpmb_response, sd->blk);
             break;
         case RPMB_REQ_READ_DATA:
-            addr = (rpmb_get_address(rpmb_frame) + 1) * RPMB_SZ_DATA;
-            len = RPMB_SZ_DATA;
+            addr += (rpmb_get_address(rpmb_frame) + 1) * RPMB_SZ_DATA;
+            rpmb_read_data(&rpmb_response, sd->blk, addr, boot_capacity);
             break;
         case RPMB_REQ_STATUS:
             rpmb_read_status(&rpmb_response);
