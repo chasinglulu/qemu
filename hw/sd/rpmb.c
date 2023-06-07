@@ -12,7 +12,7 @@
 #include "crypto/hmac.h"
 #include "qapi/error.h"
 
-#define RPMB_DEBUG   1
+//#define RPMB_DEBUG   1
 
 static struct s_rpmb rpmb_write_frame;
 #define OTP_WRITE_COUNTER_OFFSET    0x30
@@ -45,17 +45,10 @@ uint16_t rpmb_get_block_count(struct s_rpmb *rpmb_frame)
     return be16_to_cpu(rpmb_frame->block_count);
 }
 
-#if 0
-inline uint16_t rpmb_get_write_counter(struct s_rpmb *rpmb_frame)
+uint32_t rpmb_get_write_counter(struct s_rpmb *rpmb_frame)
 {
-    return be16_to_cpu(rpmb_frame->write_counter);
+    return be32_to_cpu(rpmb_frame->write_counter);
 }
-
-inline uint16_t rpmb_get_result(struct s_rpmb *rpmb_frame)
-{
-    return be16_to_cpu(rpmb_frame->result);
-}
-#endif
 
 void rpmb_write(struct s_rpmb *rpmb_frame)
 {
@@ -95,6 +88,103 @@ bool rpmb_check_key(BlockBackend *blk, uint64_t addr)
 
     if (key[RPMB_SZ_MAC])
         return false;
+
+    return true;
+}
+
+bool rpmb_check_write(struct s_rpmb *rpmb_frame, BlockBackend *blk, uint64_t key_addr, uint32_t rpmb_capacity)
+{
+    uint32_t write_counter = rpmb_get_write_counter(rpmb_frame);
+    uint32_t counter;
+    unsigned char key[RPMB_SZ_MAC + 1];
+    QCryptoHmac *hmac = NULL;
+    uint8_t *result = NULL;
+    unsigned char mac[RPMB_SZ_MAC];
+    char str[9];
+    uint32_t tmp = 0;
+    int ret, i;
+    uint64_t addr;
+
+    addr = (rpmb_get_address(rpmb_frame) + 1) * RPMB_SZ_DATA;
+    if (addr >= rpmb_capacity) {
+        rpmb_set_result(RPMB_ERR_ADDRESS);
+        return false;
+    }
+
+    if (!blk) {
+        rpmb_set_result(RPMB_ERR_GENERAL);
+        return false;
+    }
+
+    if (write_counter >= UINT32_MAX) {
+        rpmb_set_result(RPMB_ERR_COUNTER);
+        return false;
+    }
+
+    if (blk_pread(blk, key_addr+OTP_WRITE_COUNTER_OFFSET, sizeof(counter), &counter, 0) < 0) {
+        qemu_log("Read counter failed\n");
+        rpmb_set_result(RPMB_ERR_GENERAL);
+        return false;
+    }
+
+    if (write_counter != counter) {
+        rpmb_set_result(RPMB_ERR_COUNTER);
+        return false;
+    }
+
+    if (blk_pread(blk, key_addr, RPMB_SZ_MAC + 1, key, 0) < 0) {
+        qemu_log("Read key failed\n");
+        rpmb_set_result(RPMB_ERR_GENERAL);
+        return false;
+    }
+
+    if (!key[RPMB_SZ_MAC]) {
+        rpmb_set_result(RPMB_ERR_AUTH);
+        return false;
+    }
+
+    hmac = qcrypto_hmac_new(QCRYPTO_HASH_ALG_SHA256, (const uint8_t *)key,
+                                RPMB_SZ_MAC, &error_fatal);
+    g_assert(hmac != NULL);
+
+    ret = qcrypto_hmac_digest(hmac, (const char *)rpmb_frame->data,
+                                  284, (char **)&result,
+                                  &error_fatal);
+    if (ret) {
+        qemu_log("crypto digest failed\n");
+        rpmb_set_result(RPMB_ERR_GENERAL);
+        return false;
+    }
+
+    for (i = 0; i < RPMB_SZ_MAC / sizeof(tmp); i++) {
+        memcpy(str, result+(i * 8), 8);
+        qemu_strtoui(str, NULL, 16, &tmp);
+        tmp = cpu_to_be32(tmp);
+        memcpy(mac + (i * sizeof(tmp)), &tmp, sizeof(tmp));
+    }
+
+    if (memcmp(rpmb_frame->mac, mac, RPMB_SZ_MAC)) {
+        qemu_log("mac failed\n");
+        rpmb_set_result(RPMB_ERR_AUTH);
+        return false;
+    }
+
+    return true;
+}
+
+bool rpmb_update_write_counter(BlockBackend *blk, uint64_t key_addr, uint32_t counter)
+{
+    if (!blk) {
+        rpmb_set_result(RPMB_ERR_WRITE);
+        return false;
+    }
+
+    counter++;
+    if (blk_pwrite(blk, key_addr + OTP_WRITE_COUNTER_OFFSET, sizeof(counter), &counter, 0) < 0) {
+        qemu_log("Write counter failed\n");
+        rpmb_set_result(RPMB_ERR_WRITE);
+        return false;
+    }
 
     return true;
 }

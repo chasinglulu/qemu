@@ -977,6 +977,7 @@ static void sd_blk_write(SDState *sd, uint64_t addr, uint32_t len)
     unsigned int access = sd->ext_csd[EXT_CSD_PART_CONFIG] &
         EXT_CSD_PART_CONFIG_ACC_MASK;
     uint64_t boot_capacity = sd_boot_capacity_bytes(sd);
+    uint64_t rpmb_capacity = sd_rpmb_capacity_bytes(sd);
     struct s_rpmb *rpmb_frame = (struct s_rpmb *)sd->data;
     uint16_t rpmb_req = rpmb_get_request(rpmb_frame);
     uint32_t offset = 0;
@@ -1003,8 +1004,15 @@ static void sd_blk_write(SDState *sd, uint64_t addr, uint32_t len)
             sd->data[offset + RPMB_SZ_MAC] = true;
             break;
         case RPMB_REQ_WRITE_DATA:
-            offset = offsetof(struct s_rpmb, data);
+            addr = 2 * boot_capacity;
+            if (!rpmb_check_write(rpmb_frame, sd->blk, addr, rpmb_capacity))
+                return;
+
+            if (!rpmb_update_write_counter(sd->blk, addr, rpmb_get_write_counter(rpmb_frame)))
+                return;
+
             addr = (rpmb_get_address(rpmb_frame) + 1) * RPMB_SZ_DATA;
+            offset = offsetof(struct s_rpmb, data);
             len = RPMB_SZ_DATA;
             break;
         }
