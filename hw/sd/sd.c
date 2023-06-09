@@ -923,29 +923,29 @@ static void sd_blk_read(SDState *sd, uint64_t addr, uint32_t len)
     unsigned int access = sd->ext_csd[EXT_CSD_PART_CONFIG] &
         EXT_CSD_PART_CONFIG_ACC_MASK;
     uint64_t boot_capacity = sd_boot_capacity_bytes(sd);
-    struct s_rpmb *rpmb_frame = (struct s_rpmb *)sd->data;
-    struct s_rpmb rpmb_response;
-    uint16_t rpmb_req = rpmb_get_request(rpmb_frame);
+    uint32_t key_addr;
+    struct s_rpmb rpmb_rsp;
+    uint16_t request = rpmb_read_request();
 
-    if (access == EXT_CSD_PART_CONFIG_ACC_RPMB && rpmb_req > 0) {
-        qemu_log("RPMB read request: 0x%x\n", rpmb_req);
+    if (access == EXT_CSD_PART_CONFIG_ACC_RPMB && request > 0) {
+        qemu_log_mask(LOG_STRACE, "RPMB read request: 0x%x\n", request);
 
-        memset(&rpmb_response, 0, sizeof(rpmb_response));
-        addr = 2 * boot_capacity;
-        switch (rpmb_req) {
+        memset(&rpmb_rsp, 0, sizeof(rpmb_rsp));
+        key_addr = 2 * boot_capacity;
+
+        switch (request) {
         case RPMB_REQ_WCOUNTER:
-            rpmb_read_write_counter(&rpmb_response, sd->blk);
+            rpmb_acquire_wcounter(&rpmb_rsp, sd->blk, key_addr);
             break;
         case RPMB_REQ_READ_DATA:
-            addr += (rpmb_get_address(rpmb_frame) + 1) * RPMB_SZ_DATA;
-            rpmb_read_data(&rpmb_response, sd->blk, addr, boot_capacity);
+            rpmb_acquire_data(&rpmb_rsp, sd->blk, boot_capacity);
             break;
         case RPMB_REQ_STATUS:
-            rpmb_read_status(&rpmb_response);
+            rpmb_acquire_status(&rpmb_rsp);
             break;
         }
 
-        memcpy(sd->data, &rpmb_response, sizeof(rpmb_response));
+        memcpy(sd->data, &rpmb_rsp, sizeof(rpmb_rsp));
         return;
     }
 
@@ -976,42 +976,43 @@ static void sd_blk_write(SDState *sd, uint64_t addr, uint32_t len)
 {
     unsigned int access = sd->ext_csd[EXT_CSD_PART_CONFIG] &
         EXT_CSD_PART_CONFIG_ACC_MASK;
-    uint64_t boot_capacity = sd_boot_capacity_bytes(sd);
-    uint64_t rpmb_capacity = sd_rpmb_capacity_bytes(sd);
-    struct s_rpmb *rpmb_frame = (struct s_rpmb *)sd->data;
-    uint16_t rpmb_req = rpmb_get_request(rpmb_frame);
+    uint32_t boot_capacity = sd_boot_capacity_bytes(sd);
+    uint32_t rpmb_capacity = sd_rpmb_capacity_bytes(sd);
+    struct s_rpmb *rpmb_req = (struct s_rpmb *)sd->data;
+    uint16_t request = rpmb_get_request(rpmb_req);
     uint32_t offset = 0;
+    uint64_t key_addr;
 
-    if (access == EXT_CSD_PART_CONFIG_ACC_RPMB && rpmb_req > 0 ) {
-        qemu_log("RPMB write request: 0x%x\n", rpmb_req);
+    if (access == EXT_CSD_PART_CONFIG_ACC_RPMB && request > 0 ) {
+        qemu_log_mask(LOG_STRACE, "RPMB write request: 0x%x\n", request);
+
+        rpmb_record_req(rpmb_req);
 
         if (!sd->rpmb_rel_write)
             return;
-
-        rpmb_write(rpmb_frame);
+        rpmb_record_write_req(rpmb_req);
         sd->rpmb_rel_write = false;
 
-        switch (rpmb_req) {
+        switch (request) {
         case RPMB_REQ_KEY:
-            addr = rpmb_get_address(rpmb_frame);
-            addr += 2 * boot_capacity;
-            if (!rpmb_check_key(sd->blk, addr)) {
-                rpmb_set_result(RPMB_ERR_WRITE);
+            key_addr = 2 * boot_capacity;
+            if (!rpmb_key_check(sd->blk, key_addr)) {
                 return;
             }
+            addr = key_addr;
             offset = offsetof(struct s_rpmb, mac);
             len = RPMB_SZ_MAC + 1;
             sd->data[offset + RPMB_SZ_MAC] = true;
             break;
         case RPMB_REQ_WRITE_DATA:
-            addr = 2 * boot_capacity;
-            if (!rpmb_check_write(rpmb_frame, sd->blk, addr, rpmb_capacity))
+            key_addr = 2 * boot_capacity;
+            if (!rpmb_written_data_check(sd->blk, key_addr, rpmb_capacity))
                 return;
 
-            if (!rpmb_update_write_counter(sd->blk, addr, rpmb_get_write_counter(rpmb_frame)))
+            if (!rpmb_update_wcounter_into_blk(sd->blk, key_addr))
                 return;
 
-            addr = (rpmb_get_address(rpmb_frame) + 1) * RPMB_SZ_DATA;
+            addr = (rpmb_read_address() + 1) * RPMB_SZ_DATA;
             offset = offsetof(struct s_rpmb, data);
             len = RPMB_SZ_DATA;
             break;

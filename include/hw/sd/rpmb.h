@@ -56,19 +56,21 @@ struct s_rpmb {
 	unsigned short request;
 };
 
-uint16_t rpmb_get_request(struct s_rpmb *rpmb_frame);
-uint16_t rpmb_get_address(struct s_rpmb *rpmb_frame);
-uint16_t rpmb_get_block_count(struct s_rpmb *rpmb_frame);
-uint32_t rpmb_get_write_counter(struct s_rpmb *rpmb_frame);
+uint16_t rpmb_get_request(struct s_rpmb *rpmb_req);
+void rpmb_record_req(struct s_rpmb *rpmb_req);
+void rpmb_record_write_req(struct s_rpmb *rpmb_req);
 
-void rpmb_write(struct s_rpmb *rpmb_frame);
-void rpmb_read_status(struct s_rpmb *respones);
-bool rpmb_check_key(BlockBackend *blk, uint64_t addr);
-void rpmb_set_result(uint16_t err_code);
-void rpmb_read_write_counter(struct s_rpmb *respones, BlockBackend *blk);
-void rpmb_read_data(struct s_rpmb *respones, BlockBackend *blk, uint64_t addr, uint32_t boot_cap);
-void rpmb_hmac(struct s_rpmb *resp, BlockBackend *blk, uint64_t addr);
-bool rpmb_check_write(struct s_rpmb *rpmb_frame, BlockBackend *blk, uint64_t key_addr, uint32_t rpmb_capacity);
-bool rpmb_update_write_counter(BlockBackend *blk, uint64_t key_addr, uint32_t count);
+uint32_t rpmb_read_write_counter(void);
+uint16_t rpmb_read_address(void);
+uint16_t rpmb_read_block_count(void);
+uint16_t rpmb_read_request(void);
+
+void rpmb_acquire_status(struct s_rpmb *rsp);
+void rpmb_acquire_wcounter(struct s_rpmb *rsp, BlockBackend *blk, uint32_t key_addr);
+void rpmb_acquire_data(struct s_rpmb *rsp, BlockBackend *blk, uint32_t boot_capacity);
+
+bool rpmb_key_check(BlockBackend *blk, uint64_t key_addr);
+bool rpmb_written_data_check(BlockBackend *blk, uint64_t key_addr, uint32_t rpmb_capacity);
+bool rpmb_update_wcounter_into_blk(BlockBackend *blk, uint64_t key_addr);
 
 #endif
