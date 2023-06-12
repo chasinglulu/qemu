@@ -43,7 +43,7 @@ uint16_t rpmb_get_request(struct s_rpmb *rpmb_req)
     uint16_t request = be16_to_cpu(rpmb_req->request);
 
 #ifdef RPMB_DEBUG
-    qemu_hexdump(stderr, "rpmb frame", frame, sizeof(*frame));
+    qemu_hexdump(stderr, "rpmb frame", rpmb_req, sizeof(*rpmb_req));
 #endif
 
     switch (request) {
@@ -145,6 +145,8 @@ void rpmb_acquire_status(struct s_rpmb *respones)
         break;
     case RPMB_REQ_WRITE_DATA:
         respones->request = cpu_to_be16(RPMB_RESP_WRITE_DATA);
+        respones->write_counter =
+            cpu_to_be32(rpmb_get_write_counter(&rpmb_write_req));
         break;
     }
 
@@ -194,7 +196,7 @@ static uint8_t *rpmb_hmac_digest(const char *buff, uint64_t len, const uint8_t *
 {
     QCryptoHmac *hmac = NULL;
     uint8_t *result = NULL;
-    static unsigned char mac[RPMB_SZ_MAC];
+    unsigned char *mac = g_new0(unsigned char, RPMB_SZ_MAC);
     char str[9];
     uint32_t tmp = 0;
     int ret, i;
@@ -218,6 +220,7 @@ static uint8_t *rpmb_hmac_digest(const char *buff, uint64_t len, const uint8_t *
         memcpy(mac + (i * sizeof(tmp)), &tmp, sizeof(tmp));
     }
     qcrypto_hmac_free(hmac);
+    g_free(result);
 
     return mac;
 }
@@ -274,6 +277,7 @@ bool rpmb_written_data_check(BlockBackend *blk, uint64_t key_addr, uint32_t rpmb
         rpmb_set_result(RPMB_ERR_AUTH);
         return false;
     }
+    g_free(mac);
 
     return true;
 }
@@ -301,6 +305,8 @@ bool rpmb_update_wcounter_into_blk(BlockBackend *blk, uint64_t key_addr)
         rpmb_set_result(RPMB_ERR_WRITE);
         return false;
     }
+
+    rpmb_write_req.write_counter = wcounter;
 
     return true;
 }
@@ -338,6 +344,7 @@ void rpmb_acquire_data(struct s_rpmb *respone, BlockBackend *blk, uint32_t boot_
         return;
     }
     memcpy(respone->mac, mac, RPMB_SZ_MAC);
+    g_free(mac);
 
     rpmb_req_frame.address = cpu_to_be16(((addr - boot_capacity))/RPMB_SZ_DATA);
 }

@@ -991,7 +991,8 @@ static void sd_blk_write(SDState *sd, uint64_t addr, uint32_t len)
         if (!sd->rpmb_rel_write)
             return;
         rpmb_record_write_req(rpmb_req);
-        sd->rpmb_rel_write = false;
+        if (sd->multi_blk_cnt == 1)
+            sd->rpmb_rel_write = false;
 
         switch (request) {
         case RPMB_REQ_KEY:
