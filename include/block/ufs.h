@@ -3,6 +3,10 @@
 
 #include "hw/registerfields.h"
 
+#define __le16  uint16_t
+#define __le32  uint32_t
+#define __le64  uint64_t
+
 typedef struct QEMU_PACKED UfsReg {
     uint32_t cap;
     uint32_t rsvd0;

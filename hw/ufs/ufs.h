@@ -11,7 +11,7 @@
 #ifndef HW_UFS_UFS_H
 #define HW_UFS_UFS_H
 
-#include "hw/pci/pci_device.h"
+#include "hw/pci/pci.h"
 #include "hw/scsi/scsi.h"
 #include "block/ufs.h"
 

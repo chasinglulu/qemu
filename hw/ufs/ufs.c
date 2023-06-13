@@ -1255,10 +1255,8 @@ static void ufs_init_state(UfsHc *u)
         u->req_list[i].state = UFS_REQUEST_IDLE;
     }
 
-    u->doorbell_bh = qemu_bh_new_guarded(ufs_process_req, u,
-                                         &DEVICE(u)->mem_reentrancy_guard);
-    u->complete_bh = qemu_bh_new_guarded(ufs_sendback_req, u,
-                                         &DEVICE(u)->mem_reentrancy_guard);
+    u->doorbell_bh = qemu_bh_new(ufs_process_req, u);
+    u->complete_bh = qemu_bh_new(ufs_sendback_req, u);
 }
 
 static void ufs_init_hc(UfsHc *u)
