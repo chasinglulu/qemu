@@ -317,7 +317,7 @@ enum UfsUtrlbaShift {
 };
 
 enum UfsUtrlbaMask {
-    UTRLBA_UTRLBA_MASK = 0x3fffff,
+    UTRLBA_UTRLBA_MASK = 0x7fffff,
 };
 
 enum UfsUtmrlbaShift {

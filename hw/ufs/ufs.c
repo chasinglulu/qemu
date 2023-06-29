@@ -555,10 +555,14 @@ static UfsReqResult ufs_exec_scsi_cmd(UfsRequest *req)
     if (!is_wlun(lun)) {
         if (lun >= u->device_desc.number_lu) {
             trace_ufs_err_scsi_cmd_invalid_lun(lun);
-            return UFS_REQUEST_ERROR;
+            ufs_build_upiu_header(req, UPIU_TRANSACTION_RESPONSE,
+                                    0, 0, UFS_REQUEST_ERROR, 0);
+            return UFS_REQUEST_SUCCESS;
         } else if (u->lus[lun] == NULL) {
             trace_ufs_err_scsi_cmd_invalid_lun(lun);
-            return UFS_REQUEST_ERROR;
+            ufs_build_upiu_header(req, UPIU_TRANSACTION_RESPONSE,
+                                    0, 0, UFS_REQUEST_ERROR, 0);
+            return UFS_REQUEST_SUCCESS;
         }
     }
 
@@ -981,6 +985,13 @@ static QueryRespCode ufs_read_desc(UfsRequest *req)
         memset(&req->rsp_upiu.qr.data, 0, sizeof(DeviceHealthDescriptor));
         req->rsp_upiu.qr.data[0] = sizeof(DeviceHealthDescriptor);
         req->rsp_upiu.qr.data[1] = QUERY_DESC_IDN_HEALTH;
+        status = QUERY_RESULT_SUCCESS;
+        break;
+    case QUERY_DESC_IDN_CONFIGURATION:
+        /* TODO: Missing ConfigrurationDesciptor definition */
+        memset(&req->rsp_upiu.qr.data, 0, 0x90);
+        req->rsp_upiu.qr.data[0] = 0x90;
+        req->rsp_upiu.qr.data[1] = QUERY_DESC_IDN_CONFIGURATION;
         status = QUERY_RESULT_SUCCESS;
         break;
     default:
