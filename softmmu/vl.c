@@ -173,6 +173,7 @@ static QemuPluginList plugin_list = QTAILQ_HEAD_INITIALIZER(plugin_list);
 static BlockdevOptionsQueue bdo_queue = QSIMPLEQ_HEAD_INITIALIZER(bdo_queue);
 static bool nographic = false;
 static int mem_prealloc; /* force preallocation of physical target memory */
+const char *rp_path = NULL;
 static const char *vga_model = NULL;
 static DisplayOptions dpy;
 static int num_serial_hds;
@@ -2916,6 +2917,9 @@ void qemu_init(int argc, char **argv)
                 break;
             case QEMU_OPTION_mem_prealloc:
                 mem_prealloc = 1;
+                break;
+            case QEMU_OPTION_rp_path:
+                rp_path = optarg;
                 break;
             case QEMU_OPTION_d:
                 log_mask = optarg;

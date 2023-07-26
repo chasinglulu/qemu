@@ -672,6 +672,15 @@ SRST
     Preallocate memory when using -mem-path.
 ERST
 
+DEF("rp-path", HAS_ARG, QEMU_OPTION_rp_path,
+    "-rp-path DIR    A directory in which to create remote port nodes for the UNIX socket\n",
+    QEMU_ARCH_ALL)
+SRST
+``-rp-path path``
+    Selects the remote port path.
+    remote port nodes for the UNIX socket will be created in <path>.
+ERST
+
 DEF("k", HAS_ARG, QEMU_OPTION_k,
     "-k language     use keyboard layout (for example 'fr' for French)\n",
     QEMU_ARCH_ALL)

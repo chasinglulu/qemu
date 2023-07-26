@@ -28,6 +28,7 @@
 #include "qom/object.h"
 #include "qemu/rcu.h"
 
+extern const char *rp_path;
 #define RAM_ADDR_INVALID (~(ram_addr_t)0)
 
 #define MAX_PHYS_ADDR_SPACE_BITS 62
