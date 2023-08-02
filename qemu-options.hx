@@ -672,6 +672,17 @@ SRST
     Preallocate memory when using -mem-path.
 ERST
 
+DEF("sync-quantum", HAS_ARG, QEMU_OPTION_sync_quantum,
+    "-sync-quantum Max time between synchroniation, nanoseconds.\n",
+    QEMU_ARCH_ALL)
+SRST
+``-sync-quantum val``
+    Maximum time between synchronization <val>.
+    This value is used to drive periodic synchronization with remote port peers.
+    It is also used to set device models sync-quantum properties controlling
+    the maximum amount of ahead of time simulation that is prefered (only a hint).
+ERST
+
 DEF("rp-path", HAS_ARG, QEMU_OPTION_rp_path,
     "-rp-path DIR    A directory in which to create remote port nodes for the UNIX socket\n",
     QEMU_ARCH_ALL)
