@@ -35,6 +35,7 @@
 #include "hw/nvme/nvme.h"
 #include "hw/gpio/dwapb_gpio.h"
 #include "sysemu/blockdev.h"
+#include "sysemu/reset.h"
 
 #define SIGI_VIRT_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a78ae")
 
@@ -127,6 +128,52 @@ static void create_uart(SigiVirt *s, int uart)
         irq += 1;
         g_free(name);
     }
+}
+
+static void create_remote_port(SigiVirt *s)
+{
+    MemoryRegion *sysmem = get_system_memory();
+    hwaddr base = base_memmap[VIRT_REMOTER_PORT].base;
+    hwaddr size = base_memmap[VIRT_REMOTER_PORT].size;
+    SysBusDevice *sbd;
+    DeviceState *dev = NULL;
+    DeviceClass *dc;
+
+    object_initialize_child(OBJECT(s), "cosim-rp", &s->apu.rp,
+                            TYPE_REMOTE_PORT);
+    dev = DEVICE(&s->apu.rp);
+    qdev_prop_set_string(dev, "chrdev-id", "cosim");
+    object_property_set_bool(OBJECT(dev), "sync", true, &error_fatal);
+    if (global_sync_quantum)
+        qdev_prop_set_uint32(dev, "sync-quantum", global_sync_quantum);
+
+    object_initialize_child(OBJECT(s), "cosim-rpmm", &s->apu.rpmm,
+                            TYPE_REMOTE_PORT_MEMORY_MASTER);
+
+    dev = DEVICE(&s->apu.rpmm);
+    qdev_prop_set_uint32(dev, "map-num", 1);
+    qdev_prop_set_uint64(dev, "map-offset", base);
+    qdev_prop_set_uint64(dev, "map-size", size);
+    qdev_prop_set_uint32(dev, "rp-chan0", 9);
+
+    object_property_set_link(OBJECT(dev), "rp-adaptor0", OBJECT(&s->apu.rp), &error_abort);
+    object_property_set_link(OBJECT(&s->apu.rp), "remote-port-dev9", OBJECT(dev), &error_abort);
+
+    object_property_set_bool(OBJECT(&s->apu.rp), "realized", true, &error_fatal);
+    dc = DEVICE_GET_CLASS(DEVICE(&s->apu.rp));
+    if (dc->reset) {
+        /*
+         * RP adaptors don't connect to busses that reset them,
+         * manually register the handler.
+         */
+        qemu_register_reset((void (*)(void *))dc->reset, OBJECT(&s->apu.rp));
+    }
+
+    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+    /* Connect things to the machine.  */
+    sbd = SYS_BUS_DEVICE(dev);
+    memory_region_add_subregion(sysmem, base, sysbus_mmio_get_region(sbd, 0));
 }
 
 static void create_usb(SigiVirt *s, int usb)
@@ -593,6 +640,9 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
                                   drive_get(IF_PFLASH, 0, i));
     }
     create_flash_memmap(s);
+
+    if (rp_path)
+        create_remote_port(s);
 }
 
 static Property sigi_virt_properties[] = {

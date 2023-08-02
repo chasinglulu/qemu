@@ -40,6 +40,8 @@
 #include "hw/i2c//dwapb_i2c.h"
 #include "hw/misc/hobot-sigi-pmu.h"
 #include "hw/block/flash.h"
+#include "hw/remote-port.h"
+#include "hw/remote-port-memory-master.h"
 
 #define TYPE_SIGI_VIRT "sigi-virt"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
@@ -87,12 +89,14 @@ enum {
     VIRT_L2SRAM,
     VIRT_I2C,
     VIRT_PMU,
+    VIRT_REMOTER_PORT,
     VIRT_LOWMEMMAP_LAST,
 };
 
 static const MemMapEntry base_memmap[] = {
     [VIRT_FLASH] =              { 0x18000000, 0x08000000 },
     [VIRT_PMU] =                { 0x23190000, 0x00010000 },
+    [VIRT_REMOTER_PORT] =       { 0xa0800000, 0x01000000 },
     [VIRT_GIC_ITS] =            { 0x30290000, 0x00010000 },
     /* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
     [VIRT_GIC_DIST] =           { 0x30B00000, 0x00010000 },
@@ -144,6 +148,9 @@ struct SigiVirt {
         ARMCPU cpus[SIGI_VIRT_NR_ACPUS];
         GICv3State gic;
         GICv3ITSState its;
+
+        RemotePort rp;
+        RemotePortMemoryMaster rpmm;
     } apu;
 
     SIGIPMUState pmu;
