@@ -38,6 +38,7 @@ softmmu_ss.add(when: 'CONFIG_PLATFORM_BUS', if_true: files('sysbus-fdt.c'))
 specific_ss.add(when: 'CONFIG_REMOTE_PORT', if_true: files(
   'remote-port-proto.c',
   'remote-port.c',
+  'remote-port-memory-master.c',
 ))
 
 softmmu_ss.add(files(

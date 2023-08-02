@@ -349,11 +349,18 @@ static void sync_timer_hit(void *opaque)
 static char *rp_sanitize_prefix(RemotePort *s)
 {
     char *sanitized_name;
+    const char *default_name = "node";
     char *c;
 
-    sanitized_name = g_strdup(s->prefix);
+    c = strchr(s->prefix, '/');
+    if (c == NULL)
+        c = (char *)default_name;
+    if (*c == '/')
+        c++;
+
+    sanitized_name = g_strdup(c);
     for (c = sanitized_name; *c != '\0'; c++) {
-        if (*c == '/')
+        if (*c == '/' || *c == '-')
             *c = '_';
     }
     return sanitized_name;
@@ -366,7 +373,7 @@ static char *rp_autocreate_chardesc(RemotePort *s, bool server)
     int r;
 
     prefix = rp_sanitize_prefix(s);
-    r = asprintf(&chardesc, "unix:%s/qemu-rport-%s%s",
+    r = asprintf(&chardesc, "unix:%s/qemu_rport_%s%s",
                  rp_path, prefix, server ? ",wait,server" : "");
     assert(r > 0);
     free(prefix);
