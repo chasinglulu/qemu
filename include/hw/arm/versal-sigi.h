@@ -42,6 +42,8 @@
 #include "hw/block/flash.h"
 #include "hw/remote-port.h"
 #include "hw/remote-port-memory-master.h"
+#include "hw/remote-port-memory-slave.h"
+#include "hw/remote-port-gpio.h"
 
 #define TYPE_SIGI_VIRT "sigi-virt"
 OBJECT_DECLARE_SIMPLE_TYPE(SigiVirt, SIGI_VIRT)
@@ -90,13 +92,14 @@ enum {
     VIRT_I2C,
     VIRT_PMU,
     VIRT_REMOTER_PORT,
+    VIRT_REMOTER_PORT_NET,
     VIRT_LOWMEMMAP_LAST,
 };
 
 static const MemMapEntry base_memmap[] = {
+    [VIRT_L2SRAM] =             { 0x04000000, 0x02000000 },
     [VIRT_FLASH] =              { 0x18000000, 0x08000000 },
     [VIRT_PMU] =                { 0x23190000, 0x00010000 },
-    [VIRT_REMOTER_PORT] =       { 0xa0800000, 0x01000000 },
     [VIRT_GIC_ITS] =            { 0x30290000, 0x00010000 },
     /* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
     [VIRT_GIC_DIST] =           { 0x30B00000, 0x00010000 },
@@ -104,20 +107,22 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_GIC_REDIST] =         { 0x30B60000, 0x001C0000 },
     [VIRT_GEM] =                { 0x33380000, 0x00010000 },
     [VIRT_PCIE_ECAM] =          { 0x34000000, 0x00400000 },
-    [VIRT_PCIE_MMIO] =          { 0x80000000, 0x40000000 },
-    [VIRT_PCIE_MMIO_HIGH]=      { 0x8000000000, 0x8000000000 },
     [VIRT_SDHCI] =              { 0x39030000, 0x00010000 },
     [VIRT_UART] =               { 0x39050000, 0x00010000 },
     /* ...repeating for a total of SIGI_VIRT_NR_UARTS, each of that size */
+    [VIRT_REMOTER_PORT_NET] =   { 0x39090000, 0x00010000 },
     [VIRT_I2C] =                { 0x3A030000, 0x00010000 },
     /* ...repeating for a total of SIGI_VIRT_NR_I2C, each of that size */
     [VIRT_GPIO] =               { 0x3A120000, 0x00010000 },
     [VIRT_USB_CTRL] =           { 0x3A000000, 0x00010000 },
     [VIRT_DWC_USB] =            { 0x3A820000, 0x00010000 },
-    [VIRT_L2SRAM] =             { 0x04000000, 0x02000000 },
+    [VIRT_REMOTER_PORT] =       { 0x40000000, 0x02000000 },
+    [VIRT_PCIE_PIO] =           { 0x70000000, 0x10000000 },
+    [VIRT_PCIE_MMIO] =          { 0x80000000, 0x40000000 },
     [VIRT_LOW_MEM] =            { 0xC0000000, 0x40000000 },
     [VIRT_MEM] =                { 0x3000000000UL, DDR_SIZE },
     [VIRT_INTERLEVEL_MEM] =     { 0x1000000000UL, DDR_SIZE },
+    [VIRT_PCIE_MMIO_HIGH]=      { 0x8000000000, 0x8000000000 },
 };
 
 static const int a78irqmap[] = {
@@ -126,6 +131,7 @@ static const int a78irqmap[] = {
     [VIRT_GPIO] = 78, /* ...to 78 + SIGI_VIRT_NR_GPIO - 1*/
     [VIRT_PCIE_ECAM] = 127, /* ... to 130 */
     [VIRT_GEM] = 40, /* ... to 41 */
+    [VIRT_REMOTER_PORT_NET] = 90,
     [VIRT_DWC_USB] = 132,
     [VIRT_I2C] = 101,   /* ... to 103 */
 };
@@ -151,6 +157,9 @@ struct SigiVirt {
 
         RemotePort rp;
         RemotePortMemoryMaster rpmm;
+		RemotePortMemoryMaster rpmm_net;
+		RemotePortMemorySlave rpms_net;
+		RemotePortGPIO rpirq;
     } apu;
 
     SIGIPMUState pmu;

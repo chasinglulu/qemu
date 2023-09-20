@@ -132,12 +132,12 @@ static void create_uart(SigiVirt *s, int uart)
 
 static void create_remote_port(SigiVirt *s)
 {
-    MemoryRegion *sysmem = get_system_memory();
-    hwaddr base = base_memmap[VIRT_REMOTER_PORT].base;
-    hwaddr size = base_memmap[VIRT_REMOTER_PORT].size;
-    SysBusDevice *sbd;
+    // MemoryRegion *sysmem = get_system_memory();
+    // hwaddr base = base_memmap[VIRT_REMOTER_PORT].base;
+    // hwaddr size = base_memmap[VIRT_REMOTER_PORT].size;
+    // SysBusDevice *sbd;
     DeviceState *dev = NULL;
-    DeviceClass *dc;
+    // DeviceClass *dc;
 
     object_initialize_child(OBJECT(s), "cosim-rp", &s->apu.rp,
                             TYPE_REMOTE_PORT);
@@ -147,10 +147,50 @@ static void create_remote_port(SigiVirt *s)
     if (global_sync_quantum)
         qdev_prop_set_uint32(dev, "sync-quantum", global_sync_quantum);
 
-    object_initialize_child(OBJECT(s), "cosim-rpmm", &s->apu.rpmm,
+    // object_initialize_child(OBJECT(s), "cosim-rpmm", &s->apu.rpmm,
+    //                         TYPE_REMOTE_PORT_MEMORY_MASTER);
+
+    // dev = DEVICE(&s->apu.rpmm);
+    // qdev_prop_set_uint32(dev, "map-num", 1);
+    // qdev_prop_set_uint64(dev, "map-offset", base);
+    // qdev_prop_set_uint64(dev, "map-size", size);
+    // qdev_prop_set_uint32(dev, "rp-chan0", 9);
+
+    // object_property_set_link(OBJECT(dev), "rp-adaptor0", OBJECT(&s->apu.rp), &error_abort);
+    // object_property_set_link(OBJECT(&s->apu.rp), "remote-port-dev9", OBJECT(dev), &error_abort);
+
+    // object_property_set_bool(OBJECT(&s->apu.rp), "realized", true, &error_fatal);
+    // dc = DEVICE_GET_CLASS(DEVICE(&s->apu.rp));
+    // if (dc->reset) {
+    //     /*
+    //      * RP adaptors don't connect to busses that reset them,
+    //      * manually register the handler.
+    //      */
+    //     qemu_register_reset((void (*)(void *))dc->reset, OBJECT(&s->apu.rp));
+    // }
+
+    // sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+    // /* Connect things to the machine.  */
+    // sbd = SYS_BUS_DEVICE(dev);
+    // memory_region_add_subregion(sysmem, base, sysbus_mmio_get_region(sbd, 0));
+}
+
+static void create_remote_port_net(SigiVirt *s)
+{
+    MemoryRegion *sysmem = get_system_memory();
+    hwaddr base = base_memmap[VIRT_REMOTER_PORT_NET].base;
+    hwaddr size = base_memmap[VIRT_REMOTER_PORT_NET].size;
+	int irq = a78irqmap[VIRT_REMOTER_PORT_NET];
+    SysBusDevice *sbd;
+    DeviceState *dev = NULL;
+    DeviceClass *dc;
+	int i;
+
+    object_initialize_child(OBJECT(s), "cosim-rpmm-net", &s->apu.rpmm_net,
                             TYPE_REMOTE_PORT_MEMORY_MASTER);
 
-    dev = DEVICE(&s->apu.rpmm);
+    dev = DEVICE(&s->apu.rpmm_net);
     qdev_prop_set_uint32(dev, "map-num", 1);
     qdev_prop_set_uint64(dev, "map-offset", base);
     qdev_prop_set_uint64(dev, "map-size", size);
@@ -158,6 +198,18 @@ static void create_remote_port(SigiVirt *s)
 
     object_property_set_link(OBJECT(dev), "rp-adaptor0", OBJECT(&s->apu.rp), &error_abort);
     object_property_set_link(OBJECT(&s->apu.rp), "remote-port-dev9", OBJECT(dev), &error_abort);
+
+	object_initialize_child(OBJECT(s), "cosim-rpms-net", &s->apu.rpms_net,
+							TYPE_REMOTE_PORT_MEMORY_SLAVE);
+	dev = DEVICE(&s->apu.rpms_net);
+	object_property_set_link(OBJECT(dev), "rp-adaptor0", OBJECT(&s->apu.rp), &error_fatal);
+	object_property_set_link(OBJECT(&s->apu.rp), "remote-port-dev0", OBJECT(dev), &error_fatal);
+
+	object_initialize_child(OBJECT(s), "cosim-rp-irq", &s->apu.rpirq,
+							TYPE_REMOTE_PORT_GPIO);
+	dev = DEVICE(&s->apu.rpirq);
+	object_property_set_link(OBJECT(dev), "rp-adaptor0", OBJECT(&s->apu.rp), &error_fatal);
+	object_property_set_link(OBJECT(&s->apu.rp), "remote-port-dev12", OBJECT(dev), &error_fatal);
 
     object_property_set_bool(OBJECT(&s->apu.rp), "realized", true, &error_fatal);
     dc = DEVICE_GET_CLASS(DEVICE(&s->apu.rp));
@@ -169,11 +221,18 @@ static void create_remote_port(SigiVirt *s)
         qemu_register_reset((void (*)(void *))dc->reset, OBJECT(&s->apu.rp));
     }
 
-    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+	qdev_realize(DEVICE(&s->apu.rpms_net), NULL, &error_fatal);
+	sysbus_realize(SYS_BUS_DEVICE(&s->apu.rpmm_net), &error_fatal);
+	sysbus_realize(SYS_BUS_DEVICE(&s->apu.rpirq), &error_fatal);
 
-    /* Connect things to the machine.  */
-    sbd = SYS_BUS_DEVICE(dev);
-    memory_region_add_subregion(sysmem, base, sysbus_mmio_get_region(sbd, 0));
+	/* Connect things to the machine.  */
+	sbd = SYS_BUS_DEVICE(&s->apu.rpmm_net);
+	memory_region_add_subregion(sysmem, base, sysbus_mmio_get_region(sbd, 0));
+
+	for (i = 0; i < 5; i++) {
+		qemu_irq qirq = qdev_get_gpio_in(DEVICE(&s->apu.gic), irq + i);
+		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.rpirq), i, qirq);
+	}
 }
 
 static void create_usb(SigiVirt *s, int usb)
@@ -435,6 +494,9 @@ static void create_pcie(SigiVirt *s, int pcie)
     memory_region_add_subregion(get_system_memory(), base_memmap[VIRT_PCIE_MMIO_HIGH].base,
                                 high_mmio_alias);
 
+    /* Map IO port space */
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 2, base_memmap[VIRT_PCIE_PIO].base);
+
     for (i = 0; i < GPEX_NUM_IRQS; i++) {
         sysbus_connect_irq(SYS_BUS_DEVICE(dev), i,
                            qdev_get_gpio_in(gicdev, irq + i));
@@ -641,8 +703,10 @@ static void sigi_virt_realize(DeviceState *dev, Error **errp)
     }
     create_flash_memmap(s);
 
-    if (rp_path)
-        create_remote_port(s);
+    if (rp_path) {
+		create_remote_port(s);
+		create_remote_port_net(s);
+	}
 }
 
 static Property sigi_virt_properties[] = {

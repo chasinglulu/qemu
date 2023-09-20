@@ -27,6 +27,7 @@
 #include "hw/remote-port-device.h"
 #include "hw/remote-port-memory-slave.h"
 
+#define REMOTE_PORT_ERR_DEBUG
 #ifndef REMOTE_PORT_ERR_DEBUG
 #define REMOTE_PORT_DEBUG_LEVEL 0
 #else

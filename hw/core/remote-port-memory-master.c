@@ -23,6 +23,7 @@
 #include "hw/remote-port-memory-master.h"
 #include "qemu/cutils.h"
 
+#define  REMOTE_PORT_ERR_DEBUG
 #ifndef REMOTE_PORT_ERR_DEBUG
 #define REMOTE_PORT_DEBUG_LEVEL 0
 #else
@@ -60,8 +61,8 @@ MemTxResult rp_mm_access_with_def_attr(RemotePort *rp, uint32_t rp_dev,
     int len;
     MemTxResult ret;
 
-    DB_PRINT_L(0, "addr: %" HWADDR_PRIx " data: %" PRIx64 "\n",
-               addr, *buf);
+    DB_PRINT_L(0, "addr: %" HWADDR_PRIx " data: %" PRIx64 " RW: %d\n",
+               addr, *buf, rw);
 
     if (rw) {
         memcpy(data, buf, size);

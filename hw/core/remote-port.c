@@ -714,6 +714,7 @@ static void rp_realize(DeviceState *dev, Error **errp)
     int r;
 
     s->prefix = object_get_canonical_path(OBJECT(dev));
+	printf("%s: prefix: %s\n", __func__, s->prefix);
 
     s->peer.clk_base = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
 

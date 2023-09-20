@@ -33,6 +33,7 @@
 #include "net/net.h"
 #include "migration/vmstate.h"
 #include "hw/qdev-properties.h"
+#include "qemu/cutils.h"
 
 #include "hw/remote-port.h"
 #include "hw/remote-port-device.h"
@@ -77,6 +78,7 @@ static void rp_net_tx(RemotePortDevice *rpd, struct rp_pkt *pkt)
     uint8_t *data = NULL;
 
     data = rp_busaccess_rx_dataptr(s->tx.peer, &pkt->busaccess_ext_base);
+	qemu_hexdump(stdout, "rp_net_tx", data, pkt->busaccess.len);
 
     assert(pkt->busaccess.width == 0);
     assert(pkt->busaccess.stream_width == pkt->busaccess.len);
