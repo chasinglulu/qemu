@@ -43,6 +43,7 @@
 #include "hw/qdev-properties.h"
 #include "hw/clock.h"
 #include "hw/boards.h"
+#include "hw/remote-port.h"
 
 /*
  * Aliases were a bad idea from the start.  Let's keep them
@@ -704,6 +705,10 @@ DeviceState *qdev_device_add_from_qdict(const QDict *opts,
     qdict_del(dev->opts, "driver");
     qdict_del(dev->opts, "bus");
     qdict_del(dev->opts, "id");
+
+	if (!rp_device_add(opts, dev, errp)) {
+		goto err_del_dev;
+	}
 
     object_set_properties_from_keyval(&dev->parent_obj, dev->opts, from_json,
                                       errp);

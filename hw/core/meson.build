@@ -63,4 +63,5 @@ softmmu_ss.add(files(
 specific_ss.add(when: 'CONFIG_SOFTMMU', if_true: files(
   'machine-qmp-cmds.c',
   'numa.c',
+  'remote-port-qdev.c',
 ))
