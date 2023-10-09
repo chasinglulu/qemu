@@ -407,6 +407,16 @@ config HOBOT_VIRT
     select DWAPB_GPIO
     select DWAPB_I2C
 
+config LMT_VIRT
+    bool
+    imply PCI_DEVICES
+    select ARM_GIC
+    select PCI
+    select PCI_EXPRESS
+    select PCI_EXPRESS_GENERIC_BRIDGE
+    select SERIAL
+    select UNIMP
+
 config NPCM7XX
     bool
     select A9MPCORE

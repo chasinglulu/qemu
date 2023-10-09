@@ -47,6 +47,7 @@ arm_ss.add(when: 'CONFIG_CORTEX_R52_VIRT', if_true: files('r52_virt.c', 'r52_mac
 arm_ss.add(when: 'CONFIG_XLNX_VERSAL', if_true: files('xlnx-versal.c', 'xlnx-versal-virt.c'))
 arm_ss.add(when: 'CONFIG_HOBOT_VIRT', if_true: files('versal-sigi.c', 'hobot-versal-virt.c'))
 arm_ss.add(when: 'CONFIG_HOBOT_VIRT', if_true: files('sigie-virt.c', 'hobot-sigie-virt.c'))
+arm_ss.add(when: 'CONFIG_LMT_VIRT', if_true: files('lmt-virt.c', 'lmt-soc.c'))
 arm_ss.add(when: 'CONFIG_FSL_IMX25', if_true: files('fsl-imx25.c', 'imx25_pdk.c'))
 arm_ss.add(when: 'CONFIG_FSL_IMX31', if_true: files('fsl-imx31.c', 'kzm.c'))
 arm_ss.add(when: 'CONFIG_FSL_IMX6', if_true: files('fsl-imx6.c'))
