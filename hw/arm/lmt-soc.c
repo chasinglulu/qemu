@@ -226,6 +226,8 @@ static void create_ddr_memmap(LambertSoC *s)
 	hwaddr size = base_memmap[VIRT_MEM].size;
 	hwaddr iram_base = base_memmap[VIRT_IRAM].base;
 	hwaddr iram_size = base_memmap[VIRT_IRAM].size;
+	hwaddr iram_safety_base = base_memmap[VIRT_IRAM_SAFETY].base;
+	hwaddr iram_safety_size = base_memmap[VIRT_IRAM_SAFETY].size;
 	uint64_t offset = 0;
 	char *name;
 	uint64_t mapsize;
@@ -243,6 +245,10 @@ static void create_ddr_memmap(LambertSoC *s)
 
 	memory_region_init_ram(&s->mr_iram, OBJECT(s), "iram", iram_size, &error_fatal);
 	memory_region_add_subregion(sysmem, iram_base, &s->mr_iram);
+
+	/* Map iram_safety into the main system memory */
+	memory_region_init_ram(&s->mr_iram_safety, OBJECT(s), "iram_safety", iram_safety_size, &error_fatal);
+	memory_region_add_subregion(sysmem, iram_safety_base, &s->mr_iram_safety);
 }
 
 static void create_unimp(LambertSoC *s)

@@ -60,6 +60,7 @@ enum {
 	VIRT_GIC_VCPU,
 	VIRT_BOOTROM,
 	VIRT_UART,
+	VIRT_IRAM_SAFETY,
 	VIRT_SDHCI,
 	VIRT_GPIO,
 	VIRT_PMU,
@@ -76,6 +77,7 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_GIC_VCPU] =           { 0x0044e000, 0x00002000 },
 	[VIRT_BOOTROM] =			{ 0x10600000, 0x00010000 },
 	[VIRT_UART] =				{ 0x1068a000, 0x00001000 },
+	[VIRT_IRAM_SAFETY] =		{ 0x60c00000, 0x00080000 },
 	/* ...repeating for a total of LMT_SOC_NR_APU_UARTS, each of that size */
 	[VIRT_MEM] =				{ 0x400000000UL, (48UL * GiB) },
 };
@@ -102,6 +104,8 @@ struct LambertSoC {
 
 	MemoryRegion mr_ddr;
 	MemoryRegion mr_iram;
+	MemoryRegion mr_iram_safety;
+
 	struct {
 		MemoryRegion *mr_ddr;
 		bool has_emmc;

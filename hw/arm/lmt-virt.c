@@ -563,7 +563,7 @@ static void lmt_virt_mach_class_init(ObjectClass *oc, void *data)
 	mc->desc = "Lambert SoC Virtual Development Board";
 	mc->init = lmt_virt_mach_init;
 	mc->min_cpus = LMT_SOC_NR_ACPUS;
-	mc->max_cpus = LMT_SOC_NR_ACPUS + LMT_SOC_NR_RISCV;
+	mc->max_cpus = LMT_SOC_NR_ACPUS;
 	mc->minimum_page_bits = 12;
 	mc->possible_cpu_arch_ids = lmt_virt_possible_cpu_arch_ids;
 	mc->default_cpus = LMT_SOC_NR_ACPUS;
