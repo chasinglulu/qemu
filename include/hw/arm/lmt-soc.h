@@ -39,7 +39,6 @@ OBJECT_DECLARE_SIMPLE_TYPE(LambertSoC, LMT_SOC)
 #define LMT_SOC_CLUSTER_SIZE		4
 #define LMT_SOC_CLUSTERS			2
 #define LMT_SOC_NR_ACPUS			8
-#define LMT_SOC_NR_RISCV			2
 #define LMT_SOC_NR_APU_UARTS		2
 #define LMT_SOC_NR_RPU_UARTS		2
 #define LMT_SOC_NR_SDHCI			2
@@ -52,8 +51,6 @@ OBJECT_DECLARE_SIMPLE_TYPE(LambertSoC, LMT_SOC)
 #define ARCH_TIMER_S_EL1_IRQ		13
 #define ARCH_TIMER_NS_EL1_IRQ		14
 #define ARCH_TIMER_NS_EL2_IRQ		10
-
-#define DDR_SIZE    (96UL * GiB)
 
 enum {
 	VIRT_IRAM,
@@ -89,10 +86,6 @@ static const int a76irqmap[] = {
 	[VIRT_GPIO] = 78,	/* ...to 78 + LMT_SOC_NR_GPIO - 1*/
 };
 
-static const int riscvirqmap[] = {
-	[0] = 50,
-};
-
 struct LambertSoC {
 	/*< private >*/
 	SysBusDevice parent_obj;
@@ -106,12 +99,6 @@ struct LambertSoC {
 		ARMCPU cpus[LMT_SOC_NR_ACPUS];
 		GICState gic;
 	} apu;
-
-	struct {
-		struct {
-			SerialMM uarts[LMT_SOC_NR_RPU_UARTS];
-		} peri;
-	} riscv;
 
 	MemoryRegion mr_ddr;
 	MemoryRegion mr_iram;
