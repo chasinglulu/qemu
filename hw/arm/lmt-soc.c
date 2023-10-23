@@ -27,6 +27,8 @@
 #include "exec/address-spaces.h"
 #include "hw/arm/lmt-soc.h"
 #include "hw/misc/unimp.h"
+#include "sysemu/hostmem.h"
+#include "migration/vmstate.h"
 
 static bool lmt_soc_get_virt(Object *obj, Error **errp)
 {
@@ -215,6 +217,46 @@ static void create_uart(LambertSoC *s)
 	}
 }
 
+static void create_riscv_iram_memmap(LambertSoC *s)
+{
+	Object *backend;
+	MemoryRegion *mr;
+	ram_addr_t backend_size;
+	hwaddr iram_safety_base = base_memmap[VIRT_IRAM_SAFETY].base;
+	hwaddr iram_safety_size = base_memmap[VIRT_IRAM_SAFETY].size;
+
+	if (s->cfg.riscv_memdev) {
+		printf("%s\n", s->cfg.riscv_memdev);
+		backend = object_resolve_path_type(s->cfg.riscv_memdev,
+											TYPE_MEMORY_BACKEND, NULL);
+		if (!backend) {
+			error_report("Memory backend '%s' not found", s->cfg.riscv_memdev);
+			exit(EXIT_FAILURE);
+		}
+
+		backend_size = object_property_get_uint(backend, "size",  &error_abort);
+		if (backend_size != iram_safety_size) {
+			error_report("Safety Island IRAM memory size does not match the size of the memory backend");
+			exit(EXIT_FAILURE);
+		}
+
+		mr = host_memory_backend_get_memory(MEMORY_BACKEND(backend));
+		if (host_memory_backend_is_mapped(MEMORY_BACKEND(backend))) {
+			error_report("memory backend %s can't be used multiple times.",
+							object_get_canonical_path_component(OBJECT(backend)));
+			exit(EXIT_FAILURE);
+		}
+		host_memory_backend_set_mapped(MEMORY_BACKEND(backend), true);
+		vmstate_register_ram_global(mr);
+
+		memory_region_init_alias(&s->mr_iram_safety, OBJECT(s), "iram_safety", mr, 0, iram_safety_size);
+	} else {
+		memory_region_init_ram(&s->mr_iram_safety, OBJECT(s), "iram_safety", iram_safety_size, &error_fatal);
+	}
+
+	memory_region_add_subregion(get_system_memory(), iram_safety_base, &s->mr_iram_safety);
+}
+
 /* This takes the board allocated linear DDR memory and creates aliases
  * for each split DDR range/aperture on the address map.
  */
@@ -226,8 +268,6 @@ static void create_ddr_memmap(LambertSoC *s)
 	hwaddr size = base_memmap[VIRT_MEM].size;
 	hwaddr iram_base = base_memmap[VIRT_IRAM].base;
 	hwaddr iram_size = base_memmap[VIRT_IRAM].size;
-	hwaddr iram_safety_base = base_memmap[VIRT_IRAM_SAFETY].base;
-	hwaddr iram_safety_size = base_memmap[VIRT_IRAM_SAFETY].size;
 	uint64_t offset = 0;
 	char *name;
 	uint64_t mapsize;
@@ -247,8 +287,7 @@ static void create_ddr_memmap(LambertSoC *s)
 	memory_region_add_subregion(sysmem, iram_base, &s->mr_iram);
 
 	/* Map iram_safety into the main system memory */
-	memory_region_init_ram(&s->mr_iram_safety, OBJECT(s), "iram_safety", iram_safety_size, &error_fatal);
-	memory_region_add_subregion(sysmem, iram_safety_base, &s->mr_iram_safety);
+	create_riscv_iram_memmap(s);
 }
 
 static void create_unimp(LambertSoC *s)
@@ -271,6 +310,7 @@ static Property lmt_soc_properties[] = {
 						MemoryRegion*),
 	DEFINE_PROP_BOOL("has-emmc", LambertSoC, cfg.has_emmc, false),
 	DEFINE_PROP_STRING("cpu-type", LambertSoC, cfg.cpu_type),
+	DEFINE_PROP_STRING("riscv-memdev", LambertSoC, cfg.riscv_memdev),
 	DEFINE_PROP_END_OF_LIST()
 };
 

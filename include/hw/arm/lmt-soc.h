@@ -112,6 +112,7 @@ struct LambertSoC {
 		bool virt;
 		bool secure;
 		char *cpu_type;
+		char *riscv_memdev;
 	} cfg;
 };
 
