@@ -26,7 +26,7 @@
 #include "hw/arm/boot.h"
 #include "hw/intc/arm_gic.h"
 #include "qom/object.h"
-#include "hw/char/serial.h"
+#include "hw/char/dw_uart.h"
 #include "qemu/log.h"
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
@@ -95,7 +95,7 @@ struct LambertSoC {
 	/*< public >*/
 	struct {
 		struct {
-			SerialMM uarts[LMT_SOC_NR_APU_UARTS];
+			DWUARTState uarts[LMT_SOC_NR_APU_UARTS];
 		} peri;
 
 		ARMCPU cpus[LMT_SOC_NR_ACPUS];

@@ -198,12 +198,13 @@ static void create_uart(LambertSoC *s)
 		MemoryRegion *mr;
 
 		object_initialize_child(OBJECT(s), name, &s->apu.peri.uarts[i],
-								TYPE_SERIAL_MM);
+								TYPE_DW_UART);
 		dev = DEVICE(&s->apu.peri.uarts[i]);
 		qdev_prop_set_uint8(dev, "regshift", 2);
 		qdev_prop_set_uint32(dev, "baudbase", 115200);
 		qdev_prop_set_uint8(dev, "endianness", DEVICE_LITTLE_ENDIAN);
 		qdev_prop_set_chr(dev, "chardev", serial_hd(i));
+		qdev_prop_set_uint8(dev, "index", i);
 		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
 		mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);

@@ -416,6 +416,7 @@ config LMT_VIRT
     select PCI_EXPRESS_GENERIC_BRIDGE
     select SERIAL
     select UNIMP
+    select SYNOPSYS_UART
 
 config NPCM7XX
     bool
