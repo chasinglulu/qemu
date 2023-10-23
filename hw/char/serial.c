@@ -1001,6 +1001,8 @@ static uint64_t serial_mm_read(void *opaque, hwaddr addr,
                                unsigned size)
 {
     SerialMM *s = SERIAL_MM(opaque);
+
+    trace_serial_mm_read(addr, size);
     return serial_ioport_read(&s->serial, addr >> s->regshift, 1);
 }
 
@@ -1008,6 +1010,8 @@ static void serial_mm_write(void *opaque, hwaddr addr,
                             uint64_t value, unsigned size)
 {
     SerialMM *s = SERIAL_MM(opaque);
+
+    trace_serial_mm_write(addr, value, size);
     value &= 255;
     serial_ioport_write(&s->serial, addr >> s->regshift, value, 1);
 }
