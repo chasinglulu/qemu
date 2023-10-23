@@ -85,3 +85,7 @@ config SPIKE
     select MSI_NONBROKEN
     select RISCV_ACLINT
     select SIFIVE_PLIC
+
+config LMT_SAFETY
+    bool
+    select RISCV_CLIC
