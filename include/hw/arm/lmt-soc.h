@@ -73,8 +73,8 @@ static const MemMapEntry base_memmap[] = {
 	/* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
 	[VIRT_GIC_DIST] =			{ 0x00449000, 0x00001000 },
 	[VIRT_GIC_CPU] =			{ 0x0044a000, 0x00002000 },
-    [VIRT_GIC_HYP] =            { 0x0044b000, 0x00002000 },
-    [VIRT_GIC_VCPU] =           { 0x0044e000, 0x00002000 },
+	[VIRT_GIC_HYP] =			{ 0x0044c000, 0x00002000 },
+	[VIRT_GIC_VCPU] =			{ 0x0044e000, 0x00002000 },
 	[VIRT_BOOTROM] =			{ 0x10600000, 0x00010000 },
 	[VIRT_UART] =				{ 0x1068a000, 0x00001000 },
 	[VIRT_IRAM_SAFETY] =		{ 0x60c00000, 0x00080000 },

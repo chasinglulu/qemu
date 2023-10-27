@@ -132,13 +132,17 @@ static void create_gic(LambertSoC *s)
 		*/
 	qdev_prop_set_uint32(gicdev, "num-irq",
 							LMT_SOC_NUM_IRQS + 32);
-	qdev_prop_set_bit(gicdev, "has-security-extensions", false);
-	qdev_prop_set_bit(gicdev, "has-virtualization-extensions", true);
+	qdev_prop_set_bit(gicdev, "has-security-extensions", s->cfg.secure);
+	qdev_prop_set_bit(gicdev, "has-virtualization-extensions", s->cfg.virt);
 
 	gicbusdev = SYS_BUS_DEVICE(gicdev);
 	sysbus_realize(gicbusdev, &error_fatal);
 	sysbus_mmio_map(gicbusdev, 0, base_memmap[VIRT_GIC_DIST].base);
 	sysbus_mmio_map(gicbusdev, 1, base_memmap[VIRT_GIC_CPU].base);
+	if (s->cfg.virt) {
+		sysbus_mmio_map(gicbusdev, 2, base_memmap[VIRT_GIC_HYP].base);
+		sysbus_mmio_map(gicbusdev, 3, base_memmap[VIRT_GIC_VCPU].base);
+	}
 
 	/* Wire the outputs from each CPU's generic timer and the GICv3
 		* maintenance interrupt signal to the appropriate GIC PPI inputs,
@@ -170,8 +174,7 @@ static void create_gic(LambertSoC *s)
 			sysbus_connect_irq(gicbusdev, i + 4 * nr_apu, irq_in);
 		}
 		qdev_connect_gpio_out_named(cpudev, "pmu-interrupt", 0,
-									qdev_get_gpio_in(gicdev, ppibase
-														+ ARCH_VITRUAL_PMU_IRQ));
+						qdev_get_gpio_in(gicdev, ppibase + ARCH_VITRUAL_PMU_IRQ));
 
 		sysbus_connect_irq(gicbusdev, i, qdev_get_gpio_in(cpudev, ARM_CPU_IRQ));
 		sysbus_connect_irq(gicbusdev, i + nr_apu,
