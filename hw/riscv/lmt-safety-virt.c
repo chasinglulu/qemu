@@ -64,6 +64,12 @@ static void lmt_safety_virt_mach_init(MachineState *machine)
 	object_initialize_child(OBJECT(machine), "lmt-safety", &vms->safety,
 							TYPE_LMT_SAFETY);
 
+	object_property_set_str(OBJECT(&vms->safety), "cpu-type",
+									machine->cpu_type, &error_abort);
+	object_property_set_link(OBJECT(&vms->safety), "lmt-safety.mem",
+							OBJECT(machine->ram), &error_abort);
+	object_property_set_uint(OBJECT(&vms->safety), "num-harts", machine->smp.cpus, &error_abort);
+
 	if(vms->cfg.memdev)
 		object_property_set_str(OBJECT(&vms->safety), "memdev",
 								vms->cfg.memdev, &error_abort);

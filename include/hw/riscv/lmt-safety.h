@@ -27,6 +27,7 @@
 #include "qom/object.h"
 #include "hw/char/dw_uart.h"
 #include "hw/intc/riscv_clic.h"
+#include "hw/intc/riscv_aclint.h"
 #include "qemu/log.h"
 #include "exec/hwaddr.h"
 
@@ -36,24 +37,27 @@ OBJECT_DECLARE_SIMPLE_TYPE(LambertSafety, LMT_SAFETY)
 #define LMT_SAFETY_NR_RISCVS        2
 #define LMT_SAFETY_NR_UARTS         2
 
+#define LMT_SAFETY_IRQS_NUM         256
+
 enum {
 	VIRT_IRAM,
-	VIRT_GIC_DIST,
-	VIRT_GIC_CPU,
-	VIRT_GIC_HYP,
-	VIRT_GIC_VCPU,
-	VIRT_BOOTROM,
+	VIRT_CLINT,
+	VIRT_CLIC,
 	VIRT_UART,
-	VIRT_IRAM_SAFETY,
-	VIRT_SDHCI,
-	VIRT_GPIO,
-	VIRT_PMU,
 	VIRT_MEM,
-	VIRT_LOWMEMMAP_LAST,
+	VIRT_END,
 };
 
 static const MemMapEntry base_memmap[] = {
-	[VIRT_IRAM] =               { 0x00000000, 0x00020000 },
+	[VIRT_IRAM] =               { 0x60c00000, 0x00080000 },
+	[VIRT_CLINT] =              { 0x60c80000, 0x00080000 },
+	[VIRT_CLIC] =               { 0x60d24000, 0x00001000 },
+	[VIRT_UART] =               { 0x60d42000, 0x00001000 },
+	[VIRT_MEM] =                { 0x60e00000, 0x00400000 },
+};
+
+static const int irqmap[] = {
+	[VIRT_UART] = 0x10,	/* ...to 16 + LMT_SAFETY_NR_UARTS - 1 */
 };
 
 struct LambertSafety {
@@ -66,13 +70,17 @@ struct LambertSafety {
 			DWUARTState uarts[LMT_SAFETY_NR_UARTS];
 		} peri;
 
-		RISCVCPU cpus[LMT_SAFETY_NR_RISCVS];
+		RISCVHartArrayState cpus;
 		RISCVCLICState clic;
 	} safety;
 
+	MemoryRegion mr_mem;
 	MemoryRegion mr_iram;
 
 	struct {
+		MemoryRegion *mr_ddr;
+		char *cpu_type;
+		uint32_t num_harts;
 		char *memdev;
 	} cfg;
 };

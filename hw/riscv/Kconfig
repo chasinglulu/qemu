@@ -89,3 +89,4 @@ config SPIKE
 config LMT_SAFETY
     bool
     select RISCV_CLIC
+	select SYNOPSYS_UART
