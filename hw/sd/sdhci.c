@@ -1226,8 +1226,13 @@ sdhci_write(void *opaque, hwaddr offset, uint64_t val, unsigned size)
          * The eMMC automatically change the state from sd_receivingdata_state to
          * sd_transfer_state, so that the kernel will not report a "Card stuck being busy" error.
          *
+         * Before READ_MULTIPLE_BLOCK command issued, the CMD23 command will be issued first.
+         * After completing the last multiple block read in this case, the sd state still be
+         * sd_sendingdata_state without switch to sd_transfer_state, which will cause the next
+         * READ_MULTIPLE_BLOCK command to fail.
          */
-        if ((s->cmdreg >> 8) == 0x19 && s->blkcnt >= 1)
+        if (((s->cmdreg >> 8) == 0x19 || (s->cmdreg >> 8) == 0x12)
+                && s->blkcnt >= 1)
         {
             uint32_t tmp = s->argument;
 
