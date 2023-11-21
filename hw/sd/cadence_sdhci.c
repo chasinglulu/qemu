@@ -154,6 +154,7 @@ static void cadence_sdhci_realize(DeviceState *dev, Error **errp)
                                  &error_fatal);
     object_property_set_uint(OBJECT(sdev), "capareg", s->capareg,
                                  &error_fatal);
+    object_property_set_uint(OBJECT(sdev), "uhs", UHS_I, &error_fatal);
     sysbus_realize(sbd_sdhci, errp);
     memory_region_add_subregion(&s->container, CADENCE_SDHCI_SRS_BASE,
                                 sysbus_mmio_get_region(sbd_sdhci, 0));
