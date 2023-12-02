@@ -83,7 +83,7 @@ static const MemMapEntry base_memmap[] = {
 };
 
 static const int a76irqmap[] = {
-	[VIRT_UART] = 73,	/* ...to 73 + LMT_SOC_NR_APU_UARTS - 1 */
+	[VIRT_UART] = 14,	/* ...to 73 + LMT_SOC_NR_APU_UARTS - 1 */
 	[VIRT_SDHCI] = 120,	/* ... 122 for SDHCI1 */
 	[VIRT_GPIO] = 78,	/* ...to 78 + LMT_SOC_NR_GPIO - 1*/
 };
