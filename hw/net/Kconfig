@@ -129,6 +129,9 @@ config ROCKER
     default y if PCI_DEVICES
     depends on PCI && MSI_NONBROKEN
 
+config DWC_ETH_QOS
+    bool
+
 config CAN_BUS
     bool
 
