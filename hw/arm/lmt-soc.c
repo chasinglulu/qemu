@@ -221,6 +221,29 @@ static void create_uart(LambertSoC *s)
 	}
 }
 
+static void create_ethernet(LambertSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	int irq = a76irqmap[VIRT_EMAC];
+	hwaddr base = base_memmap[VIRT_EMAC].base;
+	DeviceState *gicdev = DEVICE(&s->apu.gic);
+	char *name = g_strdup_printf("eth%d", 0);
+	DeviceState *dev;
+	MemoryRegion *mr;
+
+	object_initialize_child(OBJECT(s), name, &s->apu.peri.eqos, TYPE_DWC_ETHER_QOS);
+	dev = DEVICE(&s->apu.peri.eqos);
+	if (nd_table[0].used) {
+		qemu_check_nic_model(&nd_table[0], TYPE_DWC_ETHER_QOS);
+		qdev_set_nic_properties(dev, &nd_table[0]);
+	}
+	qdev_prop_set_uint8(dev, "phy-addr", 1);
+	sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+	mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+	memory_region_add_subregion(sysmem, base, mr);
+	sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+}
+
 static void create_riscv_iram_memmap(LambertSoC *s)
 {
 	Object *backend;
@@ -305,6 +328,7 @@ static void lmt_soc_realize(DeviceState *dev, Error **errp)
 	create_apu(s);
 	create_gic(s);
 	create_uart(s);
+	create_ethernet(s);
 	create_ddr_memmap(s);
 	create_unimp(s);
 }

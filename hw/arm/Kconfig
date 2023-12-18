@@ -417,6 +417,7 @@ config LMT_VIRT
     select SERIAL
     select UNIMP
     select SYNOPSYS_UART
+    select DWC_ETH_QOS
 
 config NPCM7XX
     bool

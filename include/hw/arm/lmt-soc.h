@@ -30,6 +30,7 @@
 #include "qemu/log.h"
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
+#include "hw/net/dwc_eth_qos.h"
 
 #define TYPE_LMT_SOC "lambert-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(LambertSoC, LMT_SOC)
@@ -59,6 +60,7 @@ enum {
 	VIRT_GIC_HYP,
 	VIRT_GIC_VCPU,
 	VIRT_BOOTROM,
+	VIRT_EMAC,
 	VIRT_UART,
 	VIRT_IRAM_SAFETY,
 	VIRT_SDHCI,
@@ -77,12 +79,14 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_GIC_VCPU] =			{ 0x0044e000, 0x00002000 },
 	[VIRT_BOOTROM] =			{ 0x10600000, 0x00010000 },
 	[VIRT_UART] =				{ 0x1068a000, 0x00001000 },
+	[VIRT_EMAC] =				{ 0x60824000, 0x00004000 },
 	[VIRT_IRAM_SAFETY] =		{ 0x60c00000, 0x00080000 },
 	/* ...repeating for a total of LMT_SOC_NR_APU_UARTS, each of that size */
 	[VIRT_MEM] =				{ 0x400000000UL, (48UL * GiB) },
 };
 
 static const int a76irqmap[] = {
+	[VIRT_EMAC] = 112,
 	[VIRT_UART] = 14,	/* ...to 73 + LMT_SOC_NR_APU_UARTS - 1 */
 	[VIRT_SDHCI] = 120,	/* ... 122 for SDHCI1 */
 	[VIRT_GPIO] = 78,	/* ...to 78 + LMT_SOC_NR_GPIO - 1*/
@@ -96,6 +100,7 @@ struct LambertSoC {
 	struct {
 		struct {
 			DWUARTState uarts[LMT_SOC_NR_APU_UARTS];
+			DesignwareEtherQoSState eqos;
 		} peri;
 
 		ARMCPU cpus[LMT_SOC_NR_ACPUS];
