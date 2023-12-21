@@ -42,6 +42,7 @@ specific_ss.add(when: 'CONFIG_REMOTE_PORT', if_true: files(
   'remote-port-memory-slave.c',
   'remote-port-gpio.c',
   'remote-port-net.c',
+  'remote-port-vmctrl.c',
 ))
 
 softmmu_ss.add(files(
