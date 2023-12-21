@@ -27,6 +27,8 @@
 #include "hw/qdev-properties-system.h"
 #include "qemu/cutils.h"
 #include "exec/memory.h"
+#include "sysemu/runstate.h"
+#include "hw/core/cpu.h"
 
 #ifndef _WIN32
 #include <sys/mman.h>
@@ -547,6 +549,22 @@ static bool rp_pt_cmd_sync(RemotePort *s, struct rp_pkt *pkt)
     return false;
 }
 
+static void rp_pt_cmd_vmctrl(RemotePort *s, struct rp_pkt *pkt)
+{
+	switch (pkt->vm_ctrl.vm_cmd) {
+	case RP_VM_CTRL_START:
+		qemu_log("%s: start VM\n", __func__);
+		vm_start();
+		break;
+	case RP_VM_CTRL_SET_PC:
+		cpu_set_pc(first_cpu, pkt->vm_ctrl.addr);
+		break;
+	default:
+		assert(0);
+		break;
+	}
+}
+
 static bool rp_pt_process_pkt(RemotePort *s, RemotePortDynPkt *dpkt)
 {
     struct rp_pkt *pkt = dpkt->pkt;
@@ -600,6 +618,9 @@ static bool rp_pt_process_pkt(RemotePort *s, RemotePortDynPkt *dpkt)
     switch (pkt->hdr.cmd) {
     case RP_CMD_hello:
         rp_cmd_hello(s, pkt);
+        break;
+    case RP_CMD_VM_CTRL:
+        rp_pt_cmd_vmctrl(s, pkt);
         break;
     case RP_CMD_sync:
         if (rp_pt_cmd_sync(s, pkt)) {
@@ -714,7 +735,6 @@ static void rp_realize(DeviceState *dev, Error **errp)
     int r;
 
     s->prefix = object_get_canonical_path(OBJECT(dev));
-	printf("%s: prefix: %s\n", __func__, s->prefix);
 
     s->peer.clk_base = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
 

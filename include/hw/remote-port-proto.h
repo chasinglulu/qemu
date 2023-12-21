@@ -71,7 +71,8 @@ enum rp_cmd {
     RP_CMD_sync        = 6,
     RP_CMD_ats_req     = 7,
     RP_CMD_ats_inv     = 8,
-    RP_CMD_max         = 8
+    RP_CMD_VM_CTRL     = 9,
+    RP_CMD_max         = 9,
 };
 
 enum {
@@ -280,6 +281,17 @@ struct rp_pkt_ats {
     uint64_t reserved3;
 } PACKED;
 
+enum {
+    RP_VM_CTRL_START = 0,
+    RP_VM_CTRL_SET_PC = 1,
+};
+
+struct rp_pkt_vm_ctrl {
+    struct rp_pkt_hdr hdr;
+    uint32_t vm_cmd;
+    uint64_t addr;
+};
+
 struct rp_pkt {
     union {
         struct rp_pkt_hdr hdr;
@@ -289,6 +301,7 @@ struct rp_pkt {
         struct rp_pkt_interrupt interrupt;
         struct rp_pkt_sync sync;
         struct rp_pkt_ats ats;
+        struct rp_pkt_vm_ctrl vm_ctrl;
     };
 };
 
@@ -496,6 +509,10 @@ size_t rp_encode_ats_inv(uint32_t id, uint32_t dev,
                          struct rp_pkt_ats *pkt,
                          int64_t clk, uint64_t attr, uint64_t addr,
                          uint64_t size, uint64_t result, uint32_t flags);
+
+size_t rp_encode_vm_ctrl(uint32_t id, uint32_t dev,
+                      struct rp_pkt_vm_ctrl *pkt,
+                      uint32_t cmd, uint64_t addr);
 
 void rp_process_caps(struct rp_peer_state *peer,
                      void *caps, size_t caps_len);

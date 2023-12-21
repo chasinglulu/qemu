@@ -100,6 +100,7 @@ static const char *rp_cmd_names[RP_CMD_max + 1] = {
     [RP_CMD_sync] = "sync",
     [RP_CMD_ats_req] = "ats_request",
     [RP_CMD_ats_inv] = "ats_invalidation",
+    [RP_CMD_VM_CTRL] = "vm_ctrl",
 };
 
 const char *rp_cmd_to_string(enum rp_cmd cmd)
@@ -207,6 +208,9 @@ int rp_decode_payload(struct rp_pkt *pkt)
         pkt->ats.len = be64toh(pkt->ats.len);
         pkt->ats.result = be32toh(pkt->ats.result);
         break;
+    case RP_CMD_VM_CTRL:
+        pkt->vm_ctrl.vm_cmd = be32toh(pkt->vm_ctrl.vm_cmd);
+        pkt->vm_ctrl.addr = be64toh(pkt->vm_ctrl.addr);
     default:
         break;
     }
@@ -449,6 +453,17 @@ size_t rp_encode_sync_resp(uint32_t id, uint32_t dev,
                            int64_t clk)
 {
     return rp_encode_sync_common(id, dev, pkt, clk, RP_PKT_FLAGS_response);
+}
+
+size_t rp_encode_vm_ctrl(uint32_t id, uint32_t dev,
+                      struct rp_pkt_vm_ctrl *pkt,
+                      uint32_t cmd, uint64_t addr)
+{
+    rp_encode_hdr(&pkt->hdr, RP_CMD_VM_CTRL, id, dev,
+                  sizeof *pkt - sizeof pkt->hdr, 0);
+    pkt->vm_cmd = htobe32(cmd);
+    pkt->addr = htobe64(addr);
+    return sizeof *pkt;
 }
 
 void rp_process_caps(struct rp_peer_state *peer,
