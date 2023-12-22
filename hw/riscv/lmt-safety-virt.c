@@ -45,15 +45,32 @@ struct LambertSafetyVirt {
 
 	struct {
 		const char *memdev;
+		bool standalone;
 	} cfg;
 };
 
-static void lmt_safety_virt_virt_mach_done(Notifier *notifier, void *data)
+static void lmt_safety_virt_set_memdev(Object *obj, const char *str, Error **errp)
 {
-	// LambertSafetyVirt *vms = container_of(notifier, LambertSafetyVirt,
-	// 										machine_done);
+	LambertSafetyVirt *s = LAMBERT_SAFETY_VIRT_MACHINE(obj);
+
+	s->cfg.memdev = g_strdup(str);
+}
+
+static void lmt_virt_set_standalone(Object *obj, bool value, Error **errp)
+{
+	LambertSafetyVirt *s = LAMBERT_SAFETY_VIRT_MACHINE(obj);
+
+	s->cfg.standalone = value;
+}
+
+static void lmt_safety_virt_mach_done(Notifier *notifier, void *data)
+{
+	LambertSafetyVirt *vms = container_of(notifier, LambertSafetyVirt,
+											machine_done);
 	// MachineState *ms = MACHINE(vms);
 	// RISCVCPU *cpu = RISCV_CPU(first_cpu);
+	if (!vms->cfg.standalone)
+		autostart = 0;
 }
 
 static void lmt_safety_virt_mach_init(MachineState *machine)
@@ -73,15 +90,20 @@ static void lmt_safety_virt_mach_init(MachineState *machine)
 	if(vms->cfg.memdev)
 		object_property_set_str(OBJECT(&vms->safety), "memdev",
 								vms->cfg.memdev, &error_abort);
+	if (!vms->cfg.standalone)
+		object_property_set_bool(OBJECT(&vms->safety), "standalone", vms->cfg.standalone, &error_abort);
 
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->safety), &error_fatal);
 
-	vms->machine_done.notify = lmt_safety_virt_virt_mach_done;
+	vms->machine_done.notify = lmt_safety_virt_mach_done;
 	qemu_add_machine_init_done_notifier(&vms->machine_done);
 }
 
 static void lmt_safety_virt_mach_instance_init(Object *obj)
 {
+	LambertSafetyVirt *vms = LAMBERT_SAFETY_VIRT_MACHINE(obj);
+
+	vms->cfg.standalone = true;
 }
 
 static void lmt_safety_virt_mach_class_init(ObjectClass *oc, void *data)
@@ -102,7 +124,9 @@ static void lmt_safety_virt_mach_class_init(ObjectClass *oc, void *data)
 	mc->default_ram_id = "lmt-safety.ddr";
 
 	object_class_property_add_str(oc, "memdev", NULL,
-					NULL);
+					lmt_safety_virt_set_memdev);
+	object_class_property_add_bool(oc, "standalone", NULL,
+					lmt_virt_set_standalone);
 }
 
 static const TypeInfo lmt_safety_virt_mach_info = {

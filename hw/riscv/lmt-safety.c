@@ -29,6 +29,7 @@
 #include "hw/misc/unimp.h"
 #include "sysemu/hostmem.h"
 #include "migration/vmstate.h"
+#include "sysemu/reset.h"
 
 static const char *valid_cpus[] = {
 	RISCV_CPU_TYPE_NAME("rv32"),
@@ -201,6 +202,30 @@ static void create_unimp(LambertSafety *s)
 {
 }
 
+static void create_remote_port(LambertSafety *s)
+{
+	DeviceState *dev = NULL;
+	DeviceClass *dc;
+
+	object_initialize_child(OBJECT(s), "cosim-rp", &s->safety.rp,
+							TYPE_REMOTE_PORT);
+	dev = DEVICE(&s->safety.rp);
+	qdev_prop_set_string(dev, "chrdev-id", s->cfg.chardev_id ?: "coemu");
+	object_property_set_bool(OBJECT(dev), "sync", false, &error_fatal);
+	if (global_sync_quantum)
+		qdev_prop_set_uint32(dev, "sync-quantum", global_sync_quantum);
+
+	qdev_realize(dev, NULL, &error_fatal);
+	dc = DEVICE_GET_CLASS(DEVICE(&s->safety.rp));
+	if (dc->reset) {
+		/*
+		 * RP adaptors don't connect to busses that reset them,
+		 * manually register the handler.
+		 */
+		qemu_register_reset((void (*)(void *))dc->reset, OBJECT(&s->safety.rp));
+	}
+}
+
 static void lmt_safety_realize(DeviceState *dev, Error **errp)
 {
 	LambertSafety *s = LMT_SAFETY(dev);
@@ -211,6 +236,9 @@ static void lmt_safety_realize(DeviceState *dev, Error **errp)
 	create_uart(s);
 	create_memmap(s);
 	create_unimp(s);
+
+	if (!s->cfg.standalone)
+		create_remote_port(s);
 }
 
 static Property lmt_safety_properties[] = {
@@ -219,6 +247,8 @@ static Property lmt_safety_properties[] = {
 	DEFINE_PROP_STRING("memdev", LambertSafety, cfg.memdev),
 	DEFINE_PROP_STRING("cpu-type", LambertSafety, cfg.cpu_type),
 	DEFINE_PROP_UINT32("num-harts", LambertSafety, cfg.num_harts, 1),
+	DEFINE_PROP_STRING("chardev-id", LambertSafety, cfg.chardev_id),
+	DEFINE_PROP_BOOL("standalone", LambertSafety, cfg.standalone, true),
 	DEFINE_PROP_END_OF_LIST()
 };
 

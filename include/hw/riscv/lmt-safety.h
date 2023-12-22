@@ -30,6 +30,7 @@
 #include "hw/intc/riscv_aclint.h"
 #include "qemu/log.h"
 #include "exec/hwaddr.h"
+#include "hw/remote-port.h"
 
 #define TYPE_LMT_SAFETY "lambert-safety"
 OBJECT_DECLARE_SIMPLE_TYPE(LambertSafety, LMT_SAFETY)
@@ -72,6 +73,8 @@ struct LambertSafety {
 
 		RISCVHartArrayState cpus;
 		RISCVCLICState clic;
+
+		RemotePort rp;
 	} safety;
 
 	MemoryRegion mr_mem;
@@ -82,6 +85,8 @@ struct LambertSafety {
 		char *cpu_type;
 		uint32_t num_harts;
 		char *memdev;
+		char *chardev_id;
+		bool standalone;
 	} cfg;
 };
 
