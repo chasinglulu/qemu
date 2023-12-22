@@ -29,6 +29,7 @@
 #include "hw/misc/unimp.h"
 #include "sysemu/hostmem.h"
 #include "migration/vmstate.h"
+#include "sysemu/reset.h"
 
 static bool lmt_soc_get_virt(Object *obj, Error **errp)
 {
@@ -317,8 +318,51 @@ static void create_ddr_memmap(LambertSoC *s)
 	create_riscv_iram_memmap(s);
 }
 
+static void create_vm_ctrl(LambertSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	hwaddr base = base_memmap[VIRT_VMCTRL].base;
+	DeviceState *dev;
+	MemoryRegion *mr;
+
+	object_initialize_child(OBJECT(s), "riscv-ctrl", &s->apu.riscv_ctrl, TYPE_REMOTE_PORT_VMCTRL);
+	dev = DEVICE(&s->apu.riscv_ctrl);
+
+	object_property_set_link(OBJECT(dev), "rp-adaptor0", OBJECT(&s->apu.rp), &error_abort);
+
+	sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+	mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+	memory_region_add_subregion(sysmem, base, mr);
+}
+
 static void create_unimp(LambertSoC *s)
 {
+	if (!rp_path)
+		create_unimplemented_device("vm-ctrl", base_memmap[VIRT_VMCTRL].base, 0x100);
+}
+
+static void create_remote_port(LambertSoC *s)
+{
+	DeviceState *dev = NULL;
+	DeviceClass *dc;
+
+	object_initialize_child(OBJECT(s), "cosim-rp", &s->apu.rp,
+							TYPE_REMOTE_PORT);
+	dev = DEVICE(&s->apu.rp);
+	qdev_prop_set_string(dev, "chrdev-id", s->cfg.chardev_id ?: "coemu");
+	object_property_set_bool(OBJECT(dev), "sync", true, &error_fatal);
+	if (global_sync_quantum)
+		qdev_prop_set_uint32(dev, "sync-quantum", global_sync_quantum);
+
+	qdev_realize(dev, NULL, &error_fatal);
+	dc = DEVICE_GET_CLASS(DEVICE(&s->apu.rp));
+	if (dc->reset) {
+		/*
+		 * RP adaptors don't connect to busses that reset them,
+		 * manually register the handler.
+		 */
+		qemu_register_reset((void (*)(void *))dc->reset, OBJECT(&s->apu.rp));
+	}
 }
 
 static void lmt_soc_realize(DeviceState *dev, Error **errp)
@@ -331,6 +375,11 @@ static void lmt_soc_realize(DeviceState *dev, Error **errp)
 	create_ethernet(s);
 	create_ddr_memmap(s);
 	create_unimp(s);
+
+	if (rp_path) {
+		create_remote_port(s);
+		create_vm_ctrl(s);
+	}
 }
 
 static Property lmt_soc_properties[] = {
@@ -339,6 +388,7 @@ static Property lmt_soc_properties[] = {
 	DEFINE_PROP_BOOL("has-emmc", LambertSoC, cfg.has_emmc, false),
 	DEFINE_PROP_STRING("cpu-type", LambertSoC, cfg.cpu_type),
 	DEFINE_PROP_STRING("riscv-memdev", LambertSoC, cfg.riscv_memdev),
+	DEFINE_PROP_STRING("chardev-id", LambertSoC, cfg.chardev_id),
 	DEFINE_PROP_END_OF_LIST()
 };
 

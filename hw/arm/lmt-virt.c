@@ -53,6 +53,7 @@ struct LambertVirt {
 		bool secure;
 		bool has_emmc;
 		const char *riscv_memdev;
+		const char *chardev_id;
 	} cfg;
 };
 
@@ -83,6 +84,13 @@ static void lmt_virt_set_riscv_memdev(Object *obj, const char *str, Error **errp
 
 	printf("%s: %s\n", __func__, str);
 	s->cfg.riscv_memdev = g_strdup(str);
+}
+
+static void lmt_virt_set_chardev_id(Object *obj, const char *str, Error **errp)
+{
+	LambertVirt *s = LAMBERT_VIRT_MACHINE(obj);
+
+	s->cfg.chardev_id = g_strdup(str);
 }
 
 static const CPUArchIdList *lmt_virt_possible_cpu_arch_ids(MachineState *ms)
@@ -537,6 +545,10 @@ static void lmt_virt_mach_init(MachineState *machine)
 		object_property_set_str(OBJECT(&vms->lmt), "riscv-memdev",
 								vms->cfg.riscv_memdev, &error_abort);
 
+	if(vms->cfg.chardev_id)
+		object_property_set_str(OBJECT(&vms->lmt), "chardev-id",
+								vms->cfg.chardev_id, &error_abort);
+
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->lmt), &error_fatal);
 
 	create_fdt(vms);
@@ -595,6 +607,8 @@ static void lmt_virt_mach_class_init(ObjectClass *oc, void *data)
 					lmt_virt_set_secure);
 	object_class_property_add_str(oc, "riscv-memdev", NULL,
 					lmt_virt_set_riscv_memdev);
+	object_class_property_add_str(oc, "chardev-id", NULL,
+					lmt_virt_set_chardev_id);
 }
 
 static const TypeInfo lmt_virt_mach_info = {

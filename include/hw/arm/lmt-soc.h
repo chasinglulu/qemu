@@ -31,6 +31,8 @@
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
 #include "hw/net/dwc_eth_qos.h"
+#include "hw/remote-port.h"
+#include "hw/remote-port-vmctrl.h"
 
 #define TYPE_LMT_SOC "lambert-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(LambertSoC, LMT_SOC)
@@ -63,6 +65,7 @@ enum {
 	VIRT_EMAC,
 	VIRT_UART,
 	VIRT_IRAM_SAFETY,
+	VIRT_VMCTRL,
 	VIRT_SDHCI,
 	VIRT_GPIO,
 	VIRT_PMU,
@@ -81,7 +84,7 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_UART] =				{ 0x1068a000, 0x00001000 },
 	[VIRT_EMAC] =				{ 0x60824000, 0x00004000 },
 	[VIRT_IRAM_SAFETY] =		{ 0x60c00000, 0x00080000 },
-	/* ...repeating for a total of LMT_SOC_NR_APU_UARTS, each of that size */
+	[VIRT_VMCTRL] =				{ 0x60d24000, 0x00001000 },
 	[VIRT_MEM] =				{ 0x400000000UL, (48UL * GiB) },
 };
 
@@ -105,6 +108,9 @@ struct LambertSoC {
 
 		ARMCPU cpus[LMT_SOC_NR_ACPUS];
 		GICState gic;
+
+		RemotePort rp;
+		RemotePortVMCtrl riscv_ctrl;
 	} apu;
 
 	MemoryRegion mr_ddr;
@@ -118,6 +124,7 @@ struct LambertSoC {
 		bool secure;
 		char *cpu_type;
 		char *riscv_memdev;
+		char *chardev_id;
 	} cfg;
 };
 
