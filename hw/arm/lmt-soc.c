@@ -30,6 +30,7 @@
 #include "sysemu/hostmem.h"
 #include "migration/vmstate.h"
 #include "sysemu/reset.h"
+#include "sysemu/blockdev.h"
 
 static bool lmt_soc_get_virt(Object *obj, Error **errp)
 {
@@ -245,6 +246,66 @@ static void create_ethernet(LambertSoC *s)
 	sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
 }
 
+static void create_emmc(LambertSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	int irq = a76irqmap[VIRT_EMMC];
+	hwaddr base = base_memmap[VIRT_EMMC].base;
+	hwaddr size = base_memmap[VIRT_EMMC].size;
+	DeviceState *gicdev = DEVICE(&s->apu.gic);
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
+		char *name = g_strdup_printf("sdhci%d", i);
+		DeviceState *dev;
+		MemoryRegion *mr;
+
+		object_initialize_child(OBJECT(s), name, &s->apu.peri.mmc[i],
+								TYPE_SYSBUS_SDHCI);
+		dev = DEVICE(&s->apu.peri.mmc[i]);
+		object_property_set_uint(OBJECT(dev), "sd-spec-version", 3, &error_fatal);
+		object_property_set_uint(OBJECT(dev), "capareg", 0x70156ecc02UL, &error_fatal);
+		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+		mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+		memory_region_add_subregion(sysmem, base, mr);
+
+		sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+
+		base += size;
+		irq += 1;
+		g_free(name);
+	}
+}
+
+static void create_emmc_card(LambertSoC *s, SDHCIState *mmc, int index)
+{
+	DriveInfo *di = drive_get(IF_EMMC, 0, index);
+	BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+	DeviceState *emmc;
+
+	emmc = qdev_new(TYPE_EMMC);
+	emmc->id = g_strdup_printf("emmc%d", index);
+	object_property_add_child(OBJECT(mmc), "emmc[*]", OBJECT(emmc));
+	object_property_set_uint(OBJECT(emmc), "spec_version", 3, &error_fatal);
+	object_property_set_uint(OBJECT(emmc), "boot-config", s->cfg.part_config, &error_fatal);
+	qdev_prop_set_drive_err(emmc, "drive", blk, &error_fatal);
+	qdev_realize_and_unref(emmc, BUS(&mmc->sdbus), &error_fatal);
+}
+
+static void create_sd_card(SDHCIState *sd, int index)
+{
+	DriveInfo *di = drive_get(IF_SD, 0, index);
+	BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+	DeviceState *card;
+
+	card = qdev_new(TYPE_SD_CARD);
+	card->id = g_strdup_printf("sd%d", index);
+	object_property_add_child(OBJECT(sd), "card[*]", OBJECT(card));
+	qdev_prop_set_drive_err(card, "drive", blk, &error_fatal);
+	qdev_realize_and_unref(card, BUS(&sd->sdbus), &error_fatal);
+}
+
 static void create_riscv_iram_memmap(LambertSoC *s)
 {
 	Object *backend;
@@ -368,13 +429,23 @@ static void create_remote_port(LambertSoC *s)
 static void lmt_soc_realize(DeviceState *dev, Error **errp)
 {
 	LambertSoC *s = LMT_SOC(dev);
+	int i;
 
 	create_apu(s);
 	create_gic(s);
 	create_uart(s);
 	create_ethernet(s);
+	create_emmc(s);
 	create_ddr_memmap(s);
 	create_unimp(s);
+
+	for (i = 0; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
+		if (s->cfg.has_emmc && i == 0) {
+			create_emmc_card(s, &s->apu.peri.mmc[i], i);
+			continue;
+		}
+		create_sd_card(&s->apu.peri.mmc[i], i);
+	}
 
 	if (rp_path) {
 		create_remote_port(s);
@@ -386,6 +457,7 @@ static Property lmt_soc_properties[] = {
 	DEFINE_PROP_LINK("lmt-soc.ddr", LambertSoC, cfg.mr_ddr, TYPE_MEMORY_REGION,
 						MemoryRegion*),
 	DEFINE_PROP_BOOL("has-emmc", LambertSoC, cfg.has_emmc, false),
+	DEFINE_PROP_UINT8("part-config", LambertSoC, cfg.part_config, 0x0),
 	DEFINE_PROP_STRING("cpu-type", LambertSoC, cfg.cpu_type),
 	DEFINE_PROP_STRING("riscv-memdev", LambertSoC, cfg.riscv_memdev),
 	DEFINE_PROP_STRING("chardev-id", LambertSoC, cfg.chardev_id),

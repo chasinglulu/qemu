@@ -33,6 +33,7 @@
 #include "hw/net/dwc_eth_qos.h"
 #include "hw/remote-port.h"
 #include "hw/remote-port-vmctrl.h"
+#include "hw/sd/sdhci.h"
 
 #define TYPE_LMT_SOC "lambert-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(LambertSoC, LMT_SOC)
@@ -62,11 +63,11 @@ enum {
 	VIRT_GIC_HYP,
 	VIRT_GIC_VCPU,
 	VIRT_BOOTROM,
+	VIRT_EMMC,
 	VIRT_EMAC,
 	VIRT_UART,
 	VIRT_IRAM_SAFETY,
 	VIRT_VMCTRL,
-	VIRT_SDHCI,
 	VIRT_GPIO,
 	VIRT_PMU,
 	VIRT_MEM,
@@ -81,6 +82,7 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_GIC_HYP] =			{ 0x0044c000, 0x00002000 },
 	[VIRT_GIC_VCPU] =			{ 0x0044e000, 0x00002000 },
 	[VIRT_BOOTROM] =			{ 0x10600000, 0x00010000 },
+	[VIRT_EMMC] =				{ 0x10620000, 0x00001000 },
 	[VIRT_UART] =				{ 0x1068a000, 0x00001000 },
 	[VIRT_EMAC] =				{ 0x60824000, 0x00004000 },
 	[VIRT_IRAM_SAFETY] =		{ 0x60c00000, 0x00080000 },
@@ -89,9 +91,9 @@ static const MemMapEntry base_memmap[] = {
 };
 
 static const int a76irqmap[] = {
+	[VIRT_EMMC] = 9,
 	[VIRT_EMAC] = 112,
 	[VIRT_UART] = 14,	/* ...to 73 + LMT_SOC_NR_APU_UARTS - 1 */
-	[VIRT_SDHCI] = 120,	/* ... 122 for SDHCI1 */
 	[VIRT_GPIO] = 78,	/* ...to 78 + LMT_SOC_NR_GPIO - 1*/
 };
 
@@ -104,6 +106,7 @@ struct LambertSoC {
 		struct {
 			DWUARTState uarts[LMT_SOC_NR_APU_UARTS];
 			DesignwareEtherQoSState eqos;
+			SDHCIState mmc[LMT_SOC_NR_SDHCI];
 		} peri;
 
 		ARMCPU cpus[LMT_SOC_NR_ACPUS];
@@ -120,6 +123,7 @@ struct LambertSoC {
 	struct {
 		MemoryRegion *mr_ddr;
 		bool has_emmc;
+		uint8_t part_config;
 		bool virt;
 		bool secure;
 		char *cpu_type;

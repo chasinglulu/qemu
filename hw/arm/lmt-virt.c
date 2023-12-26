@@ -30,6 +30,7 @@
 #include "qom/object.h"
 #include "sysemu/sysemu.h"
 #include "qemu/log.h"
+#include "qapi/visitor.h"
 
 #define TYPE_LAMBERT_VIRT_MACHINE MACHINE_TYPE_NAME("lmt-virt")
 OBJECT_DECLARE_SIMPLE_TYPE(LambertVirt, LAMBERT_VIRT_MACHINE)
@@ -52,6 +53,7 @@ struct LambertVirt {
 		bool virt;
 		bool secure;
 		bool has_emmc;
+		uint8_t part_config;
 		const char *riscv_memdev;
 		const char *chardev_id;
 	} cfg;
@@ -62,6 +64,23 @@ static void lmt_virt_set_emmc(Object *obj, bool value, Error **errp)
 	LambertVirt *s = LAMBERT_VIRT_MACHINE(obj);
 
 	s->cfg.has_emmc = value;
+}
+
+static void lmt_virt_set_part_config(Object *obj, Visitor *v,
+						const char *name, void *opaque,
+						Error **errp)
+{
+	LambertVirt *s = LAMBERT_VIRT_MACHINE(obj);
+	Error *error = NULL;
+	uint8_t value;
+
+	visit_type_uint8(v, name, &value, &error);
+	if (error) {
+		error_propagate(errp, error);
+		return;
+	}
+
+	s->cfg.part_config = value;
 }
 
 static void lmt_virt_set_virt(Object *obj, bool value, Error **errp)
@@ -345,6 +364,47 @@ static void fdt_add_gic_node(LambertVirt *vms)
 	g_free(nodename);
 }
 
+static void fdt_add_sdhci_nodes(const LambertVirt *vms)
+{
+	char *nodename;
+	uint32_t nr_sdhci = ARRAY_SIZE(vms->lmt.apu.peri.mmc);
+	hwaddr base = base_memmap[VIRT_EMMC].base;
+	hwaddr size = base_memmap[VIRT_EMMC].size;
+	int irq = a76irqmap[VIRT_EMMC];
+	const char compat[] = "ax,lambert-sdhci";
+	int i;
+
+	/* Create nodes in incremental address */
+	base = base + size * (nr_sdhci - 1);
+	irq = irq + 2 * (nr_sdhci - 1);
+	for (i = nr_sdhci - 1; i >= 0; i--) {
+		nodename = g_strdup_printf("/soc/sdhci@%" PRIx64, base);
+		qemu_fdt_add_subnode(vms->fdt, nodename);
+		/* Note that we can't use setprop_string because of the embedded NUL */
+		qemu_fdt_setprop(vms->fdt, nodename, "compatible",
+							compat, sizeof(compat));
+		qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
+										2, base, 2, size);
+		qemu_fdt_setprop_cells(vms->fdt, nodename, "interrupts",
+								GIC_FDT_IRQ_TYPE_SPI, irq,
+								GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+		qemu_fdt_setprop_cells(vms->fdt, nodename, "sdhci-caps-mask", 0xffffffff, 0xffffffff);
+		qemu_fdt_setprop_cells(vms->fdt, nodename, "sdhci-caps", 0x70, 0x156ecc02);
+
+		if (vms->cfg.has_emmc && i == 0) {
+			qemu_fdt_setprop(vms->fdt, nodename, "non-removable", NULL, 0);
+			qemu_fdt_setprop(vms->fdt, nodename, "no-sdio", NULL, 0);
+			qemu_fdt_setprop(vms->fdt, nodename, "no-sd", NULL, 0);
+			qemu_fdt_setprop_cell(vms->fdt, nodename, "bus-width", 8);
+			qemu_fdt_setprop(vms->fdt, nodename, "cap-mmc-highspeed", NULL, 0);
+			qemu_fdt_setprop(vms->fdt, nodename, "mmc-hs200-1_8v", NULL, 0);
+		}
+		qemu_fdt_setprop_cell(vms->fdt, nodename, "max-frequency", 200000000);
+		base -= size;
+		irq -= 2;
+	}
+}
+
 static void fdt_add_aliases_nodes(LambertVirt *vms)
 {
 	int i;
@@ -533,6 +593,10 @@ static void lmt_virt_mach_init(MachineState *machine)
 		object_property_set_bool(OBJECT(&vms->lmt), "has-emmc",
 								vms->cfg.has_emmc, &error_abort);
 
+	if (vms->cfg.part_config)
+		object_property_set_uint(OBJECT(&vms->lmt), "part-config",
+							vms->cfg.part_config, &error_abort);
+
 	if (vms->cfg.virt)
 		object_property_set_bool(OBJECT(&vms->lmt), "virtualization",
 								vms->cfg.virt, &error_abort);
@@ -557,6 +621,7 @@ static void lmt_virt_mach_init(MachineState *machine)
 	fdt_add_gic_node(vms);
 	fdt_add_timer_nodes(vms);
 	fdt_add_uart_nodes(vms);
+	fdt_add_sdhci_nodes(vms);
 	fdt_add_aliases_nodes(vms);
 
 	vms->bootinfo.ram_size = machine->ram_size;
@@ -609,19 +674,22 @@ static void lmt_virt_mach_class_init(ObjectClass *oc, void *data)
 					lmt_virt_set_riscv_memdev);
 	object_class_property_add_str(oc, "chardev-id", NULL,
 					lmt_virt_set_chardev_id);
+	object_class_property_add(oc, "part-config", "uint8",
+		NULL, lmt_virt_set_part_config,
+		NULL, NULL);
 }
 
 static const TypeInfo lmt_virt_mach_info = {
-    .name       = TYPE_LAMBERT_VIRT_MACHINE,
-    .parent     = TYPE_MACHINE,
-    .class_init = lmt_virt_mach_class_init,
-    .instance_init = lmt_virt_mach_instance_init,
-    .instance_size = sizeof(LambertVirt),
+	.name       = TYPE_LAMBERT_VIRT_MACHINE,
+	.parent     = TYPE_MACHINE,
+	.class_init = lmt_virt_mach_class_init,
+	.instance_init = lmt_virt_mach_instance_init,
+	.instance_size = sizeof(LambertVirt),
 };
 
 static void lmt_virt_machine_init(void)
 {
-    type_register_static(&lmt_virt_mach_info);
+	type_register_static(&lmt_virt_mach_info);
 }
 
 type_init(lmt_virt_machine_init)
