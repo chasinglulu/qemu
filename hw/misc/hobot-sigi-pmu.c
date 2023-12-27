@@ -30,6 +30,8 @@ struct cpu_offset_map {
     {CPU_CL0_C1_0, 0x100},
     {CPU_CL0_C2_0, 0x200},
     {CPU_CL0_C3_0, 0x300},
+    {CPU_CL1_C0_0, 0x10000},
+    {CPU_CL1_C1_0, 0x10100},
 };
 
 static int get_cpu_idx_by_offset(unsigned long offset)
@@ -77,7 +79,6 @@ static void sigi_update_state(SIGIPMUState *s, unsigned long offset)
     trace_sigi_update_state(cpu_idx, entry);
 
     switch (offset) {
-
     case CPU_CL0_C0_0:
         if (s->cpu_cl0_c00 & CPU_CLX_CY_PWR_TRI) {
             power_on = true;
@@ -115,6 +116,26 @@ static void sigi_update_state(SIGIPMUState *s, unsigned long offset)
         } else {
             power_on = false;
             s->cpu_cl0_c31 = deposit32(s->cpu_cl0_c31, 0, 2, 2);
+        }
+        break;
+
+    case CPU_CL1_C0_0:
+        if (s->cpu_cl1_c00 & CPU_CLX_CY_PWR_TRI) {
+            power_on = true;
+            s->cpu_cl1_c00 = deposit32(s->cpu_cl1_c00, 0, 2, 1);
+        } else {
+            power_on = false;
+            s->cpu_cl1_c00 = deposit32(s->cpu_cl1_c00, 0, 2, 2);
+        }
+        break;
+
+    case CPU_CL1_C1_0:
+        if (s->cpu_cl1_c10 & CPU_CLX_CY_PWR_TRI) {
+            power_on = true;
+            s->cpu_cl1_c10 = deposit32(s->cpu_cl1_c10, 0, 2, 1);
+        } else {
+            power_on = false;
+            s->cpu_cl1_c10 = deposit32(s->cpu_cl1_c10, 0, 2, 2);
         }
         break;
 
@@ -176,6 +197,22 @@ static uint64_t sigi_pmu_read(void *opaque, hwaddr offset, unsigned int size)
         r = s->cpu_cl0_c31;
         break;
 
+    case CPU_CL1_C0_0:
+        r = s->cpu_cl1_c00;
+        break;
+
+    case CPU_CL1_C0_1:
+        r = s->cpu_cl1_c01;
+        break;
+
+    case CPU_CL1_C1_0:
+        r = s->cpu_cl1_c10;
+        break;
+
+    case CPU_CL1_C1_1:
+        r = s->cpu_cl1_c11;
+        break;
+
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                 "%s: bad read offset 0x%" HWADDR_PRIx "\n",
@@ -225,6 +262,20 @@ static void sigi_pmu_write(void *opaque, hwaddr offset,
     case CPU_CL0_C3_1:
         break;
 
+    case CPU_CL1_C0_0:
+        s->cpu_cl1_c00 = value;
+        break;
+
+    case CPU_CL1_C0_1:
+        break;
+
+    case CPU_CL1_C1_0:
+        s->cpu_cl1_c10 = value;
+        break;
+
+    case CPU_CL1_C1_1:
+        break;
+
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                 "%s: bad read offset 0x%" HWADDR_PRIx "\n",
@@ -255,6 +306,10 @@ static void sigi_pmu_reset(DeviceState *dev)
     s->cpu_cl0_c21 = 0x08000102;
     s->cpu_cl0_c30 = 0x00000860;
     s->cpu_cl0_c31 = 0x08000102;
+    s->cpu_cl1_c00 = 0x00000860;
+    s->cpu_cl1_c01 = 0x08000102;
+    s->cpu_cl1_c10 = 0x00000860;
+    s->cpu_cl1_c11 = 0x08000102;
 }
 
 static const VMStateDescription vmstate_sigi_pmu = {
@@ -270,6 +325,10 @@ static const VMStateDescription vmstate_sigi_pmu = {
         VMSTATE_UINT32(cpu_cl0_c21,        SIGIPMUState),
         VMSTATE_UINT32(cpu_cl0_c30,        SIGIPMUState),
         VMSTATE_UINT32(cpu_cl0_c31,        SIGIPMUState),
+        VMSTATE_UINT32(cpu_cl1_c00,        SIGIPMUState),
+        VMSTATE_UINT32(cpu_cl1_c01,        SIGIPMUState),
+        VMSTATE_UINT32(cpu_cl1_c10,        SIGIPMUState),
+        VMSTATE_UINT32(cpu_cl1_c11,        SIGIPMUState),
         VMSTATE_END_OF_LIST()
     }
 };

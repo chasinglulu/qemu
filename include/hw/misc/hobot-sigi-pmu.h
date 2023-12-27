@@ -32,6 +32,10 @@ enum {
     CPU_CL0_C2_1            = 0x0230,
     CPU_CL0_C3_0            = 0x0238,
     CPU_CL0_C3_1            = 0x023c,
+    CPU_CL1_C0_0            = 0x0240,
+    CPU_CL1_C0_1            = 0x0244,
+    CPU_CL1_C1_0            = 0x0248,
+    CPU_CL1_C1_1            = 0x024c,
 };
 
 /* PMU register fields for CPU core Y of cluster X */
@@ -69,6 +73,10 @@ struct SIGIPMUState {
     uint32_t cpu_cl0_c21;
     uint32_t cpu_cl0_c30;
     uint32_t cpu_cl0_c31;
+    uint32_t cpu_cl1_c00;
+    uint32_t cpu_cl1_c01;
+    uint32_t cpu_cl1_c10;
+    uint32_t cpu_cl1_c11;
 };
 
 #endif
