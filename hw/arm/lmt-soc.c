@@ -31,6 +31,7 @@
 #include "migration/vmstate.h"
 #include "sysemu/reset.h"
 #include "sysemu/blockdev.h"
+#include "hw/misc/hobot-sigi-pmu.h"
 
 static bool lmt_soc_get_virt(Object *obj, Error **errp)
 {
@@ -396,6 +397,26 @@ static void create_vm_ctrl(LambertSoC *s)
 	memory_region_add_subregion(sysmem, base, mr);
 }
 
+static void create_fake_pmu(LambertSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	hwaddr base = base_memmap[VIRT_FAKE_PMU].base;
+	DeviceState *dev;
+	MemoryRegion *mr;
+	static MemoryRegion shared;
+
+	dev =qdev_new(TYPE_SIGI_PMU);
+	object_property_add_child(OBJECT(s), "fake-pmu", OBJECT(dev));
+
+	memory_region_init_alias(&shared, OBJECT(dev), "share-iram", &s->mr_iram, 124*KiB, 4*KiB);
+	object_property_set_link(OBJECT(dev), "shared-ocm", OBJECT(&shared),
+									&error_abort);
+
+	sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+	mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+	memory_region_add_subregion(sysmem, base, mr);
+}
+
 static void create_unimp(LambertSoC *s)
 {
 	if (!rp_path)
@@ -437,6 +458,7 @@ static void lmt_soc_realize(DeviceState *dev, Error **errp)
 	create_ethernet(s);
 	create_emmc(s);
 	create_ddr_memmap(s);
+	create_fake_pmu(s);
 	create_unimp(s);
 
 	for (i = 0; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {

@@ -58,6 +58,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(LambertSoC, LMT_SOC)
 
 enum {
 	VIRT_IRAM,
+	VIRT_FAKE_PMU,
 	VIRT_GIC_DIST,
 	VIRT_GIC_CPU,
 	VIRT_GIC_HYP,
@@ -76,6 +77,7 @@ enum {
 
 static const MemMapEntry base_memmap[] = {
 	[VIRT_IRAM] = 				{ 0x00000000, 0x00020000 },
+	[VIRT_FAKE_PMU] =			{ 0x00100000, 0x00100000 },
 	/* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
 	[VIRT_GIC_DIST] =			{ 0x00449000, 0x00001000 },
 	[VIRT_GIC_CPU] =			{ 0x0044a000, 0x00002000 },
