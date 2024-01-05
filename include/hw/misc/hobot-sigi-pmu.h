@@ -36,6 +36,10 @@ enum {
     CPU_CL1_C0_1            = 0x0244,
     CPU_CL1_C1_0            = 0x0248,
     CPU_CL1_C1_1            = 0x024c,
+    CPU_CL1_C2_0            = 0x0250,
+    CPU_CL1_C2_1            = 0x0254,
+    CPU_CL1_C3_0            = 0x0258,
+    CPU_CL1_C3_1            = 0x025c,
 };
 
 /* PMU register fields for CPU core Y of cluster X */
@@ -50,7 +54,7 @@ typedef struct SIGIPMUState SIGIPMUState;
 DECLARE_INSTANCE_CHECKER(SIGIPMUState, SIGI_PMU,
                          TYPE_SIGI_PMU)
 
-#define SIGI_PMU_MM_SIZE    0x04000000U
+#define SIGI_PMU_MM_SIZE    0x00300000U
 
 struct SIGIPMUState {
     SysBusDevice parent_obj;
@@ -77,6 +81,10 @@ struct SIGIPMUState {
     uint32_t cpu_cl1_c01;
     uint32_t cpu_cl1_c10;
     uint32_t cpu_cl1_c11;
+    uint32_t cpu_cl1_c20;
+    uint32_t cpu_cl1_c21;
+    uint32_t cpu_cl1_c30;
+    uint32_t cpu_cl1_c31;
 };
 
 #endif

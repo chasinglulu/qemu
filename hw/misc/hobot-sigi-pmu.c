@@ -32,6 +32,8 @@ struct cpu_offset_map {
     {CPU_CL0_C3_0, 0x300},
     {CPU_CL1_C0_0, 0x10000},
     {CPU_CL1_C1_0, 0x10100},
+    {CPU_CL1_C2_0, 0x10200},
+    {CPU_CL1_C3_0, 0x10300},
 };
 
 static int get_cpu_idx_by_offset(unsigned long offset)
@@ -69,6 +71,7 @@ static void sigi_update_state(SIGIPMUState *s, unsigned long offset)
     }
     target_aa64 = arm_feature(&target_cpu->env, ARM_FEATURE_AARCH64);
 
+    assert(s->mr_shared_ocm);
     ocm_reg = memory_region_get_ram_ptr(s->mr_shared_ocm);
     if (!ocm_reg) {
         qemu_log_mask(LOG_GUEST_ERROR, "Can't find shared OCM region.\n");
@@ -136,6 +139,26 @@ static void sigi_update_state(SIGIPMUState *s, unsigned long offset)
         } else {
             power_on = false;
             s->cpu_cl1_c10 = deposit32(s->cpu_cl1_c10, 0, 2, 2);
+        }
+        break;
+
+    case CPU_CL1_C2_0:
+        if (s->cpu_cl1_c20 & CPU_CLX_CY_PWR_TRI) {
+            power_on = true;
+            s->cpu_cl1_c20 = deposit32(s->cpu_cl1_c20, 0, 2, 1);
+        } else {
+            power_on = false;
+            s->cpu_cl1_c20 = deposit32(s->cpu_cl1_c20, 0, 2, 2);
+        }
+        break;
+
+    case CPU_CL1_C3_0:
+        if (s->cpu_cl1_c30 & CPU_CLX_CY_PWR_TRI) {
+            power_on = true;
+            s->cpu_cl1_c30 = deposit32(s->cpu_cl1_c30, 0, 2, 1);
+        } else {
+            power_on = false;
+            s->cpu_cl1_c30 = deposit32(s->cpu_cl1_c30, 0, 2, 2);
         }
         break;
 
@@ -213,6 +236,22 @@ static uint64_t sigi_pmu_read(void *opaque, hwaddr offset, unsigned int size)
         r = s->cpu_cl1_c11;
         break;
 
+    case CPU_CL1_C2_0:
+        r = s->cpu_cl1_c20;
+        break;
+
+    case CPU_CL1_C2_1:
+        r = s->cpu_cl1_c21;
+        break;
+
+    case CPU_CL1_C3_0:
+        r = s->cpu_cl1_c30;
+        break;
+
+    case CPU_CL1_C3_1:
+        r = s->cpu_cl1_c31;
+        break;
+
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                 "%s: bad read offset 0x%" HWADDR_PRIx "\n",
@@ -274,6 +313,20 @@ static void sigi_pmu_write(void *opaque, hwaddr offset,
         break;
 
     case CPU_CL1_C1_1:
+        break;
+
+    case CPU_CL1_C2_0:
+        s->cpu_cl1_c20 = value;
+        break;
+
+    case CPU_CL1_C2_1:
+        break;
+
+    case CPU_CL1_C3_0:
+        s->cpu_cl1_c30 = value;
+        break;
+
+    case CPU_CL1_C3_1:
         break;
 
     default:
