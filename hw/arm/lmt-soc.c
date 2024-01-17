@@ -316,7 +316,6 @@ static void create_riscv_iram_memmap(LambertSoC *s)
 	hwaddr iram_safety_size = base_memmap[VIRT_IRAM_SAFETY].size;
 
 	if (s->cfg.riscv_memdev) {
-		printf("%s\n", s->cfg.riscv_memdev);
 		backend = object_resolve_path_type(s->cfg.riscv_memdev,
 											TYPE_MEMORY_BACKEND, NULL);
 		if (!backend) {

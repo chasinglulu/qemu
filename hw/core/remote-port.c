@@ -553,7 +553,6 @@ static void rp_pt_cmd_vmctrl(RemotePort *s, struct rp_pkt *pkt)
 {
 	switch (pkt->vm_ctrl.vm_cmd) {
 	case RP_VM_CTRL_START:
-		qemu_log("%s: start VM\n", __func__);
 		vm_start();
 		break;
 	case RP_VM_CTRL_SET_PC:

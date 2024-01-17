@@ -101,7 +101,6 @@ static void lmt_virt_set_riscv_memdev(Object *obj, const char *str, Error **errp
 {
 	LambertVirt *s = LAMBERT_VIRT_MACHINE(obj);
 
-	printf("%s: %s\n", __func__, str);
 	s->cfg.riscv_memdev = g_strdup(str);
 }
 
