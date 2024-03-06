@@ -49,6 +49,7 @@ arm_ss.add(when: 'CONFIG_HOBOT_VIRT', if_true: files('versal-sigi.c', 'hobot-ver
 arm_ss.add(when: 'CONFIG_HOBOT_VIRT', if_true: files('sigie-virt.c', 'hobot-sigie-virt.c'))
 arm_ss.add(when: 'CONFIG_LMT_VIRT', if_true: files('lmt-virt.c', 'lmt-soc.c'))
 arm_ss.add(when: 'CONFIG_LAGUNA', if_true: files('laguna-virt.c', 'laguna.c'))
+arm_ss.add(when: 'CONFIG_LUA_SAFETY', if_true: files('laguna-safety.c', 'lua-safety-virt.c'))
 arm_ss.add(when: 'CONFIG_FSL_IMX25', if_true: files('fsl-imx25.c', 'imx25_pdk.c'))
 arm_ss.add(when: 'CONFIG_FSL_IMX31', if_true: files('fsl-imx31.c', 'kzm.c'))
 arm_ss.add(when: 'CONFIG_FSL_IMX6', if_true: files('fsl-imx6.c'))

@@ -427,6 +427,14 @@ config LAGUNA
     select SYNOPSYS_UART
     select DWC_ETH_QOS
 
+config LUA_SAFETY
+    bool
+    select ARM_GIC
+    select SERIAL
+    select UNIMP
+    select SYNOPSYS_UART
+    select DWC_ETH_QOS
+
 config NPCM7XX
     bool
     select A9MPCORE
