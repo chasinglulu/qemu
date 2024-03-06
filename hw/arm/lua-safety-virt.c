@@ -90,29 +90,38 @@ static void fdt_add_clk_nodes(LuaSafetyVirt *vms)
 	 */
 	vms->clock_phandle = qemu_fdt_alloc_phandle(vms->fdt);
 	qemu_fdt_add_subnode(vms->fdt, "/apb-pclk");
-	qemu_fdt_setprop_string(vms->fdt, "/apb-pclk", "compatible", "fixed-clock");
-	qemu_fdt_setprop_cell(vms->fdt, "/apb-pclk", "#clock-cells", 0x0);
+	qemu_fdt_setprop_cell(vms->fdt, "/apb-pclk", "phandle", vms->clock_phandle);
 	qemu_fdt_setprop_cell(vms->fdt, "/apb-pclk", "clock-frequency", 24000000);
 	qemu_fdt_setprop_string(vms->fdt, "/apb-pclk", "clock-output-names",
 								"clk24mhz");
-	qemu_fdt_setprop_cell(vms->fdt, "/apb-pclk", "phandle", vms->clock_phandle);
-	}
+	qemu_fdt_setprop_cell(vms->fdt, "/apb-pclk", "#clock-cells", 0x0);
+	qemu_fdt_setprop_string(vms->fdt, "/apb-pclk", "compatible", "fixed-clock");
+}
 
 static void fdt_add_timer_nodes(const LuaSafetyVirt *vms)
 {
-	// uint32_t irqflags = GIC_FDT_IRQ_FLAGS_LEVEL_HI;
-	// const char compat[] = "arm,armv8-timer";
+	uint32_t nr_timer = ARRAY_SIZE(vms->safety.mpu.peri.ttc);
+	hwaddr base = base_memmap[VIRT_TIMER].base;
+	hwaddr size = base_memmap[VIRT_TIMER].size;
+	char *nodename;
+	const char compat[] = "cdns,ttc";
+	int i;
 
-	// qemu_fdt_add_subnode(vms->fdt, "/timer");
-	// qemu_fdt_setprop(vms->fdt, "/timer", "compatible",
-	// 					compat, sizeof(compat));
+	base = base + size * (nr_timer - 1);
+	for (i = nr_timer - 1; i >= 0; i--) {
+		nodename = g_strdup_printf("/soc/timer@%" PRIx64, base);
+		qemu_fdt_add_subnode(vms->fdt, nodename);
+		qemu_fdt_setprop_cell(vms->fdt, nodename, "clocks",
+									vms->clock_phandle);
+		qemu_fdt_setprop_cell(vms->fdt, nodename, "timer-width", 0x20);
 
-	// qemu_fdt_setprop(vms->fdt, "/timer", "always-on", NULL, 0);
-	// qemu_fdt_setprop_cells(vms->fdt, "/timer", "interrupts",
-	// 					GIC_FDT_IRQ_TYPE_PPI, ARCH_TIMER_S_EL1_IRQ, irqflags,
-	// 					GIC_FDT_IRQ_TYPE_PPI, ARCH_TIMER_NS_EL1_IRQ, irqflags,
-	// 					GIC_FDT_IRQ_TYPE_PPI, ARCH_TIMER_VIRT_IRQ, irqflags,
-	// 					GIC_FDT_IRQ_TYPE_PPI, ARCH_TIMER_NS_EL2_IRQ, irqflags);
+		qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
+									1, base, 1, size);
+		qemu_fdt_setprop(vms->fdt, nodename, "compatible",
+							compat, sizeof(compat));
+		base -= size;
+		g_free(nodename);
+	}
 }
 
 static void fdt_add_cpu_nodes(const LuaSafetyVirt *vms)
@@ -154,9 +163,8 @@ static void fdt_add_cpu_nodes(const LuaSafetyVirt *vms)
 		ARMCPU *armcpu = ARM_CPU(qemu_get_cpu(cpu));
 
 		qemu_fdt_add_subnode(vms->fdt, nodename);
-		qemu_fdt_setprop_string(vms->fdt, nodename, "device_type", "cpu");
-		qemu_fdt_setprop_string(vms->fdt, nodename, "compatible",
-									armcpu->dtb_compatible);
+		qemu_fdt_setprop_cell(vms->fdt, nodename, "phandle",
+									qemu_fdt_alloc_phandle(vms->fdt));
 
 		if (addr_cells == 2) {
 			qemu_fdt_setprop_u64(vms->fdt, nodename, "reg",
@@ -166,9 +174,9 @@ static void fdt_add_cpu_nodes(const LuaSafetyVirt *vms)
 									armcpu->mp_affinity);
 		}
 
-		qemu_fdt_setprop_cell(vms->fdt, nodename, "phandle",
-									qemu_fdt_alloc_phandle(vms->fdt));
-
+		qemu_fdt_setprop_string(vms->fdt, nodename, "device_type", "cpu");
+		qemu_fdt_setprop_string(vms->fdt, nodename, "compatible",
+									armcpu->dtb_compatible);
 		g_free(nodename);
 	}
 }
