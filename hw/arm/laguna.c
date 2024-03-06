@@ -270,10 +270,12 @@ static void create_ddr_memmap(LagunaSoC *s)
 	MemoryRegion *sysmem = get_system_memory();
 	hwaddr base = base_memmap[VIRT_MEM].base;
 	hwaddr size = base_memmap[VIRT_MEM].size;
-	hwaddr ocm_base = base_memmap[VIRT_OCM_SAFETY].base;
-	hwaddr ocm_size = base_memmap[VIRT_OCM_SAFETY].size;
+	hwaddr ocm_base = base_memmap[VIRT_OCM_NPU].base;
+	hwaddr ocm_size = base_memmap[VIRT_OCM_NPU].size;
 	hwaddr iram_base = base_memmap[VIRT_IRAM_SAFETY].base;
 	hwaddr iram_size = base_memmap[VIRT_IRAM_SAFETY].size;
+	hwaddr ocms_base = base_memmap[VIRT_OCM_SAFETY].base;
+	hwaddr ocms_size = base_memmap[VIRT_OCM_SAFETY].size;
 	uint64_t offset = 0;
 	char *name;
 	uint64_t mapsize;
@@ -289,12 +291,15 @@ static void create_ddr_memmap(LagunaSoC *s)
 	memory_region_add_subregion(sysmem, base, &s->mr_ddr);
 	g_free(name);
 
+	memory_region_init_ram(&s->mr_ocm, OBJECT(s), "ocm", ocm_size, &error_fatal);
+	memory_region_add_subregion(sysmem, ocm_base, &s->mr_ocm);
+
 	memory_region_init_ram(&s->mr_iram_safety, OBJECT(s), "iram-safety", iram_size, &error_fatal);
 	memory_region_add_subregion(sysmem, iram_base, &s->mr_iram_safety);
 
 	/* Map ocm_safety into the main system memory */
-	memory_region_init_ram(&s->mr_ocm_safety, OBJECT(s), "ocm-safety", ocm_size, &error_fatal);
-	memory_region_add_subregion(sysmem, ocm_base, &s->mr_ocm_safety);
+	memory_region_init_ram(&s->mr_ocm_safety, OBJECT(s), "ocm-safety", ocms_size, &error_fatal);
+	memory_region_add_subregion(sysmem, ocms_base, &s->mr_ocm_safety);
 
 }
 

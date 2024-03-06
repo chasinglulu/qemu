@@ -63,6 +63,7 @@ enum {
 	VIRT_EMMC,
 	VIRT_EMAC,
 	VIRT_UART,
+	VIRT_OCM_NPU,
 	VIRT_MEM,
 };
 
@@ -78,6 +79,7 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_EMMC]              =    { 0x01410000, 0x00001000 },
 	[VIRT_EMAC]              =    { 0x01614000, 0x00004000 },
 	[VIRT_UART]              =    { 0x01802000, 0x00001000 },
+	[VIRT_OCM_NPU]           =    { 0x07E00000, 0x00200000 },
 	[VIRT_MEM]               =    { 0x400000000UL, (48UL * GiB) },
 };
 
@@ -103,6 +105,7 @@ struct LagunaSoC {
 	} apu;
 
 	MemoryRegion mr_ddr;
+	MemoryRegion mr_ocm;
 	MemoryRegion mr_ocm_safety;
 	MemoryRegion mr_iram_safety;
 
