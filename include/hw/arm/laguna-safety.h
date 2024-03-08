@@ -55,24 +55,24 @@ OBJECT_DECLARE_SIMPLE_TYPE(LagunaSafety, LUA_SAFETY)
 enum {
 	VIRT_BOOTROM,
 	VIRT_EMAC,
+	VIRT_UART,
+	VIRT_TIMER,
 	VIRT_OCM,
 	VIRT_IRAM,
 	VIRT_GIC_DIST,
 	VIRT_GIC_CPU,
-	VIRT_TIMER,
-	VIRT_UART,
 };
 
 static const MemMapEntry base_memmap[] = {
-	[VIRT_BOOTROM]           =    { 0x00000000, 0x00010000 },
-	[VIRT_EMAC]              =    { 0x00034000, 0x00004000 },
+	[VIRT_BOOTROM]           =    { 0xFFFF0000, 0x00010000 },
+	[VIRT_EMAC]              =    { 0x00536000, 0x00004000 },
+	[VIRT_UART]              =    { 0x00602000, 0x00001000 },
+	[VIRT_TIMER]             =    { 0x00657000, 0x00001000 },
 	[VIRT_OCM]               =    { 0x00200000, 0x00200000 },
 	[VIRT_IRAM]              =    { 0x00400000, 0x00010000 },
 	/* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
-	[VIRT_GIC_DIST]          =    { 0x00451000, 0x00001000 },
-	[VIRT_GIC_CPU]           =    { 0x00452000, 0x00002000 },
-	[VIRT_TIMER]             =    { 0x00469000, 0x00001000 },
-	[VIRT_UART]              =    { 0x01802000, 0x00001000 },
+	[VIRT_GIC_DIST]          =    { 0x00501000, 0x00001000 },
+	[VIRT_GIC_CPU]           =    { 0x00502000, 0x00002000 },
 };
 
 static const int mpu_irqmap[] = {

@@ -68,23 +68,23 @@ enum {
 };
 
 static const MemMapEntry base_memmap[] = {
-	[VIRT_BOOTROM_SAFETY]    =    { 0x00000000, 0x00010000 },
+	[VIRT_BOOTROM_SAFETY]    =    { 0xFFFF0000, 0x00010000 },
 	[VIRT_OCM_SAFETY]        =    { 0x00200000, 0x00200000 },
 	[VIRT_IRAM_SAFETY]       =    { 0x00400000, 0x00010000 },
 	/* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
-	[VIRT_GIC_DIST]          =    { 0x00E01000, 0x00001000 },
-	[VIRT_GIC_CPU]           =    { 0x00E02000, 0x00002000 },
-	[VIRT_GIC_HYP]           =    { 0x00E04000, 0x00002000 },
-	[VIRT_GIC_VCPU]          =    { 0x00E06000, 0x00002000 },
-	[VIRT_EMMC]              =    { 0x01410000, 0x00001000 },
-	[VIRT_EMAC]              =    { 0x01614000, 0x00004000 },
-	[VIRT_UART]              =    { 0x01802000, 0x00001000 },
-	[VIRT_OCM_NPU]           =    { 0x07E00000, 0x00200000 },
-	[VIRT_MEM]               =    { 0x400000000UL, (48UL * GiB) },
+	[VIRT_GIC_DIST]          =    { 0x08001000, 0x00001000 },
+	[VIRT_GIC_CPU]           =    { 0x08002000, 0x00002000 },
+	[VIRT_GIC_HYP]           =    { 0x08004000, 0x00002000 },
+	[VIRT_GIC_VCPU]          =    { 0x08006000, 0x00002000 },
+	[VIRT_EMMC]              =    { 0x0C010000, 0x00002000 },
+	[VIRT_EMAC]              =    { 0x0E014000, 0x00004000 },
+	[VIRT_UART]              =    { 0x0E402000, 0x00001000 },
+	[VIRT_OCM_NPU]           =    { 0x14000000, 0x00200000 },
+	[VIRT_MEM]               =    { 0x100000000UL, (8UL * GiB) },
 };
 
 static const int apu_irqmap[] = {
-	[VIRT_EMMC] = 9,
+	[VIRT_EMMC] = 0,
 	[VIRT_UART] = 14,	/* ...to 14 + LUA_SOC_NR_APU_UARTS - 1 */
 	[VIRT_EMAC] = 112,
 };
