@@ -53,6 +53,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(LagunaSafety, LUA_SAFETY)
 #define ARCH_TIMER_NS_EL2_IRQ		10
 
 enum {
+	VIRT_TCM,
 	VIRT_BOOTROM,
 	VIRT_EMAC,
 	VIRT_UART,
@@ -64,6 +65,7 @@ enum {
 };
 
 static const MemMapEntry base_memmap[] = {
+	[VIRT_TCM]               =    { 0x00000000, 0x00008000 },
 	[VIRT_BOOTROM]           =    { 0xFFFF0000, 0x00010000 },
 	[VIRT_EMAC]              =    { 0x00536000, 0x00004000 },
 	[VIRT_UART]              =    { 0x00602000, 0x00001000 },
@@ -78,6 +80,7 @@ static const MemMapEntry base_memmap[] = {
 static const int mpu_irqmap[] = {
 	[VIRT_UART] = 14,	/* ...to 14 + LUA_SAFETY_NR_APU_UARTS - 1 */
 	[VIRT_EMAC] = 112,
+	[VIRT_TIMER] = 20,
 };
 
 struct LagunaSafety {
@@ -97,5 +100,8 @@ struct LagunaSafety {
 
 	MemoryRegion mr_ocm;
 	MemoryRegion mr_iram;
+	MemoryRegion mr_tcm[LUA_SAFETY_NR_MCPUS];
+	MemoryRegion mr_cpu[LUA_SAFETY_NR_MCPUS];
+	MemoryRegion mr_cpu_alias[LUA_SAFETY_NR_MCPUS];
 };
 #endif

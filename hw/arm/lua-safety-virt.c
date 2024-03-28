@@ -237,7 +237,7 @@ static void fdt_add_uart_nodes(const LuaSafetyVirt *vms)
 	hwaddr base = base_memmap[VIRT_UART].base;
 	hwaddr size = base_memmap[VIRT_UART].size;
 	int irq = mpu_irqmap[VIRT_UART];
-	const char compat[] = "ns16550";
+	const char compat[] = "snps,dw-apb-uart";
 	const char clocknames[] = "apb_pclk";
 	int i;
 
@@ -264,7 +264,6 @@ static void fdt_add_uart_nodes(const LuaSafetyVirt *vms)
 		qemu_fdt_setprop(vms->fdt, nodename, "clock-names",
 								clocknames, sizeof(clocknames));
 		qemu_fdt_setprop(vms->fdt, nodename, "u-boot,dm-pre-reloc", NULL, 0);
-		qemu_fdt_setprop(vms->fdt, nodename, "u-boot,dm-spl", NULL, 0);
 		base -= size;
 		irq -= 1;
 		if (i == 0) {
@@ -395,9 +394,9 @@ static void lua_virt_mach_init(MachineState *machine)
 	fdt_add_uart_nodes(vms);
 	fdt_add_aliases_nodes(vms);
 
-	vms->bootinfo.ram_size = machine->ram_size;
+	vms->bootinfo.ram_size = base_memmap[VIRT_OCM].size;
 	vms->bootinfo.board_id = -1;
-	vms->bootinfo.loader_start = base_memmap[VIRT_OCM].base;
+	vms->bootinfo.loader_start = base_memmap[VIRT_OCM].base + 0x1C0000UL;
 	vms->bootinfo.get_dtb = lua_virt_dtb;
 	vms->bootinfo.modify_dtb = lua_virt_modify_dtb;
 	vms->bootinfo.skip_dtb_autoload = true;

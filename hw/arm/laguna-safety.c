@@ -35,10 +35,17 @@
 static void create_apu(LagunaSafety *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
+	hwaddr tcm_base = base_memmap[VIRT_TCM].base;
+	hwaddr tcm_size = base_memmap[VIRT_TCM].size;
+	char *name;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(s->mpu.cpus); i++) {
 		Object *cpuobj;
+
+		name = g_strdup_printf("cpu%d-memory", i);
+		memory_region_init(&s->mr_cpu[i], OBJECT(s), name, UINT64_MAX);
+		g_free(name);
 
 		object_initialize_child(OBJECT(s), "mpu[*]", &s->mpu.cpus[i],
 									LUA_SAFETY_MCPU_TYPE);
@@ -49,8 +56,19 @@ static void create_apu(LagunaSafety *s)
 										&error_abort);
 		}
 
-		object_property_set_link(cpuobj, "memory", OBJECT(sysmem),
+		object_property_set_link(cpuobj, "memory", OBJECT(&s->mr_cpu[i]),
 									&error_abort);
+
+		name = g_strdup_printf("tcm%x", i);
+		memory_region_init_ram(&s->mr_tcm[i], OBJECT(s), name, tcm_size, &error_fatal);
+		memory_region_add_subregion(&s->mr_cpu[i], tcm_base, &s->mr_tcm[i]);
+		g_free(name);
+
+		name = g_strdup_printf("cpu%d-alias", i);
+		memory_region_init_alias(&s->mr_cpu_alias[i], OBJECT(s), name, sysmem, tcm_size, 0x100000000);
+		g_free(name);
+
+		memory_region_add_subregion_overlap(&s->mr_cpu[i], tcm_size, &s->mr_cpu_alias[i], 0);
 
 		qdev_realize(DEVICE(cpuobj), NULL, &error_fatal);
 	}
