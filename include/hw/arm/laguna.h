@@ -31,6 +31,7 @@
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
 #include "hw/sd/sdhci.h"
+#include "hw/ssi/designware_spi.h"
 
 #define TYPE_LUA_SOC "laguna-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(LagunaSoC, LUA_SOC)
@@ -43,6 +44,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(LagunaSoC, LUA_SOC)
 #define LUA_SOC_NR_APU_UARTS		4
 #define LUA_SOC_NR_SDHCI			2
 #define LUA_SOC_NR_GPIO				2
+#define LUA_SOC_NR_SPI				1
 #define LUA_SOC_NUM_IRQS			480
 
 #define ARCH_VITRUAL_PMU_IRQ		7
@@ -63,6 +65,7 @@ enum {
 	VIRT_EMMC,
 	VIRT_EMAC,
 	VIRT_UART,
+	VIRT_SPI,
 	VIRT_OCM_NPU,
 	VIRT_MEM,
 };
@@ -79,14 +82,16 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_EMMC]              =    { 0x0C010000, 0x00002000 },
 	[VIRT_EMAC]              =    { 0x0E014000, 0x00004000 },
 	[VIRT_UART]              =    { 0x0E402000, 0x00001000 },
+	[VIRT_SPI]               =    { 0x0C040000, 0x00001000 },
 	[VIRT_OCM_NPU]           =    { 0x14000000, 0x00200000 },
 	[VIRT_MEM]               =    { 0x100000000UL, (8UL * GiB) },
 };
 
 static const int apu_irqmap[] = {
 	[VIRT_EMMC] = 0,
-	[VIRT_UART] = 14,	/* ...to 14 + LUA_SOC_NR_APU_UARTS - 1 */
-	[VIRT_EMAC] = 112,
+	[VIRT_SPI] = 3,
+	[VIRT_UART] = 171,
+	[VIRT_EMAC] = 164,
 };
 
 struct LagunaSoC {
@@ -98,6 +103,7 @@ struct LagunaSoC {
 		struct {
 			DWUARTState uarts[LUA_SOC_NR_APU_UARTS];
 			SDHCIState mmc[LUA_SOC_NR_SDHCI];
+			DWSPIState spi[LUA_SOC_NR_SPI];
 		} peri;
 
 		ARMCPU cpus[LUA_SOC_NR_ACPUS];

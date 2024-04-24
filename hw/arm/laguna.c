@@ -31,6 +31,7 @@
 #include "sysemu/reset.h"
 #include "sysemu/blockdev.h"
 #include "hw/arm/laguna.h"
+#include "hw/ssi/ssi.h"
 
 static bool lua_soc_get_virt(Object *obj, Error **errp)
 {
@@ -201,6 +202,56 @@ static void create_uart(LagunaSoC *s)
 	}
 }
 
+static void create_spi_flash(LagunaSoC *s)
+{
+	BusState *spi_bus;
+	DeviceState *flash_dev;
+	qemu_irq cs_line;
+	DriveInfo *dinfo = drive_get(IF_MTD, 0, 0);
+
+	spi_bus = BUS(s->apu.peri.spi[0].spi);
+	flash_dev = qdev_new("sst25vf032b");
+	if (dinfo) {
+		qdev_prop_set_drive_err(flash_dev, "drive",
+						blk_by_legacy_dinfo(dinfo), &error_fatal);
+	}
+	qdev_realize_and_unref(flash_dev, spi_bus, &error_fatal);
+
+	cs_line = qdev_get_gpio_in_named(flash_dev, SSI_GPIO_CS, 0);
+
+	sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.spi[0]), 1, cs_line);
+}
+
+static void create_spi(LagunaSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	int irq = apu_irqmap[VIRT_SPI];
+	hwaddr base = base_memmap[VIRT_SPI].base;
+	hwaddr size = base_memmap[VIRT_SPI].size;
+	DeviceState *gicdev = DEVICE(&s->apu.gic);
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(s->apu.peri.spi); i++) {
+		char *name = g_strdup_printf("spi%d", i);
+		DeviceState *dev;
+		MemoryRegion *mr;
+
+		object_initialize_child(OBJECT(s), name, &s->apu.peri.spi[i],
+								TYPE_DESIGNWARE_SPI);
+		dev = DEVICE(&s->apu.peri.spi[i]);
+		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+		mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+		memory_region_add_subregion(sysmem, base, mr);
+
+		sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+
+		base += size;
+		irq += 1;
+		g_free(name);
+	}
+}
+
 static void create_emmc(LagunaSoC *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
@@ -312,6 +363,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_gic(s);
 	create_uart(s);
 	create_emmc(s);
+	create_spi(s);
 	create_ddr_memmap(s);
 	// create_unimp(s);
 
@@ -322,6 +374,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 		}
 		create_sd_card(&s->apu.peri.mmc[i], i);
 	}
+	create_spi_flash(s);
 }
 
 static Property lua_soc_properties[] = {
