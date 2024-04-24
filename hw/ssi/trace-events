@@ -27,3 +27,8 @@ ibex_spi_host_reset(const char *msg) "%s"
 ibex_spi_host_transfer(uint32_t tx_data, uint32_t rx_data) "tx_data: 0x%" PRIx32 " rx_data: @0x%" PRIx32
 ibex_spi_host_write(uint64_t addr, uint32_t size, uint64_t data) "@0x%" PRIx64 " size %u: 0x%" PRIx64
 ibex_spi_host_read(uint64_t addr, uint32_t size) "@0x%" PRIx64 " size %u:"
+
+# designware_spi.c
+
+designware_spi_write(uint64_t addr, uint64_t val64, uint32_t size) "write@0x%" PRIx64 " value 0x%" PRIx64 " size %u"
+designware_spi_read(uint64_t addr, uint32_t size, uint64_t data) "read@0x%" PRIx64 " size %u: 0x%" PRIx64
