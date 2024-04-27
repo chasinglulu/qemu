@@ -354,6 +354,18 @@ static void create_ddr_memmap(LagunaSoC *s)
 
 }
 
+static void create_unimp(LagunaSoC *s)
+{
+	int i;
+	char *name;
+
+	for (i = 0; i < ARRAY_SIZE(unimp_memmap); i++) {
+		name = g_strdup_printf("unimp_device@%08lx", unimp_memmap[i].base);
+		create_unimplemented_device(name, unimp_memmap[i].base, unimp_memmap[i].size);
+		g_free(name);
+	}
+}
+
 static void lua_soc_realize(DeviceState *dev, Error **errp)
 {
 	LagunaSoC *s = LUA_SOC(dev);
@@ -365,7 +377,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_emmc(s);
 	create_spi(s);
 	create_ddr_memmap(s);
-	// create_unimp(s);
+	create_unimp(s);
 
 	for (i = 0; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
 		if (s->cfg.has_emmc && i == 0) {

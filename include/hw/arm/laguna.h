@@ -81,10 +81,19 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_GIC_VCPU]          =    { 0x08006000, 0x00002000 },
 	[VIRT_EMMC]              =    { 0x0C010000, 0x00002000 },
 	[VIRT_EMAC]              =    { 0x0E014000, 0x00004000 },
-	[VIRT_UART]              =    { 0x0E402000, 0x00001000 },
+	[VIRT_UART]              =    { 0x0E403000, 0x00001000 },
 	[VIRT_SPI]               =    { 0x0C040000, 0x00001000 },
 	[VIRT_OCM_NPU]           =    { 0x14000000, 0x00200000 },
 	[VIRT_MEM]               =    { 0x100000000UL, (8UL * GiB) },
+};
+
+static const MemMapEntry unimp_memmap[] = {
+	/* sec_glb_0 region */
+	{ 0x18000000, 0x1000 },
+	/* periph_ck_rst region */
+	{ 0x0E001000, 0x1000 },
+	/* gtmr_cnt region */
+	{ 0x08012000, 0x1000 },
 };
 
 static const int apu_irqmap[] = {
