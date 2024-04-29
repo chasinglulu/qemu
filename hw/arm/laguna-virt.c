@@ -54,6 +54,7 @@ struct LagunaVirt {
 		bool secure;
 		bool has_emmc;
 		uint8_t part_config;
+		uint8_t bootmode;
 	} cfg;
 };
 
@@ -79,6 +80,23 @@ static void lua_virt_set_part_config(Object *obj, Visitor *v,
 	}
 
 	s->cfg.part_config = value;
+}
+
+static void lua_virt_set_bootmode(Object *obj, Visitor *v,
+						const char *name, void *opaque,
+						Error **errp)
+{
+	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
+	Error *error = NULL;
+	uint8_t value;
+
+	visit_type_uint8(v, name, &value, &error);
+	if (error) {
+		error_propagate(errp, error);
+		return;
+	}
+
+	s->cfg.bootmode = value;
 }
 
 static void lua_virt_set_virt(Object *obj, bool value, Error **errp)
@@ -578,6 +596,10 @@ static void lua_virt_mach_init(MachineState *machine)
 		object_property_set_uint(OBJECT(&vms->lua), "part-config",
 							vms->cfg.part_config, &error_abort);
 
+	if (vms->cfg.bootmode)
+		object_property_set_uint(OBJECT(&vms->lua), "bootmode",
+							vms->cfg.bootmode, &error_abort);
+
 	if (vms->cfg.virt)
 		object_property_set_bool(OBJECT(&vms->lua), "virtualization",
 								vms->cfg.virt, &error_abort);
@@ -645,6 +667,9 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 					lua_virt_set_secure);
 	object_class_property_add(oc, "part-config", "uint8",
 		NULL, lua_virt_set_part_config,
+		NULL, NULL);
+	object_class_property_add(oc, "bootmode", "uint8",
+		NULL, lua_virt_set_bootmode,
 		NULL, NULL);
 }
 

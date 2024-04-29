@@ -32,6 +32,7 @@
 #include "sysemu/blockdev.h"
 #include "hw/arm/laguna.h"
 #include "hw/ssi/ssi.h"
+#include "hw/irq.h"
 
 static bool lua_soc_get_virt(Object *obj, Error **errp)
 {
@@ -398,6 +399,17 @@ static void create_unimp(LagunaSoC *s)
 	}
 }
 
+static void create_bootmode(LagunaSoC *s)
+{
+	int i;
+	qemu_irq irq;
+
+	for (i = 0; i < LUA_BOOTSTRAP_PINS; i++) {
+		irq = qdev_get_gpio_in(DEVICE(&s->apu.peri.gpios[0]), i);
+		qdev_connect_gpio_out(DEVICE(s), i, irq);
+	}
+}
+
 static void lua_soc_realize(DeviceState *dev, Error **errp)
 {
 	LagunaSoC *s = LUA_SOC(dev);
@@ -420,6 +432,8 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 		create_sd_card(&s->apu.peri.mmc[i], i);
 	}
 	create_spi_flash(s);
+
+	create_bootmode(s);
 }
 
 static Property lua_soc_properties[] = {
@@ -427,8 +441,21 @@ static Property lua_soc_properties[] = {
 						MemoryRegion*),
 	DEFINE_PROP_BOOL("has-emmc", LagunaSoC, cfg.has_emmc, false),
 	DEFINE_PROP_UINT8("part-config", LagunaSoC, cfg.part_config, 0x0),
+	DEFINE_PROP_UINT8("bootmode", LagunaSoC, cfg.bootmode, 0x0),
 	DEFINE_PROP_END_OF_LIST()
 };
+
+static void lua_soc_reset(DeviceState *dev)
+{
+	LagunaSoC *s = LUA_SOC(dev);
+	int i;
+
+	for (i = 0; i < LUA_BOOTSTRAP_PINS; i++) {
+		if (extract32(s->cfg.bootmode, i, 1))
+			qemu_set_irq(s->output[i],
+						extract32(s->cfg.bootmode, i, 1));
+	}
+}
 
 static void lua_soc_class_init(ObjectClass *klass, void *data)
 {
@@ -448,10 +475,15 @@ static void lua_soc_class_init(ObjectClass *klass, void *data)
 	object_class_property_set_description(klass, "secure",
 											"Set on/off to enable/disable the ARM "
 											"Security Extensions (TrustZone)");
+
+	dc->reset = lua_soc_reset;
 }
 
 static void lua_soc_init(Object *obj)
 {
+	LagunaSoC *s = LUA_SOC(obj);
+
+	qdev_init_gpio_out(DEVICE(s), s->output, LUA_BOOTSTRAP_PINS);
 }
 
 static const TypeInfo lua_soc_info = {

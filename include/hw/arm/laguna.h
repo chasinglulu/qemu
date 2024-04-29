@@ -47,6 +47,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(LagunaSoC, LUA_SOC)
 #define LUA_SOC_NR_GPIO				2
 #define LUA_SOC_NR_SPI				1
 #define LUA_SOC_NUM_IRQS			480
+#define LUA_BOOTSTRAP_PINS			3
 
 #define ARCH_VITRUAL_PMU_IRQ		7
 #define ARCH_GIC_MAINT_IRQ			9
@@ -129,10 +130,14 @@ struct LagunaSoC {
 	MemoryRegion mr_ocm_safety;
 	MemoryRegion mr_iram_safety;
 
+	/* Bootstrap PIN */
+	qemu_irq output[LUA_BOOTSTRAP_PINS];
+
 	struct {
 		MemoryRegion *mr_ddr;
 		bool has_emmc;
 		uint8_t part_config;
+		uint8_t bootmode;
 		bool virt;
 		bool secure;
 	} cfg;
