@@ -99,7 +99,7 @@ static const MemMapEntry unimp_memmap[] = {
 static const int apu_irqmap[] = {
 	[VIRT_EMMC] = 0,
 	[VIRT_SPI] = 3,
-	[VIRT_UART] = 171,
+	[VIRT_UART] = 166,
 	[VIRT_EMAC] = 164,
 };
 
