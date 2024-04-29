@@ -167,6 +167,38 @@ static void create_gic(LagunaSoC *s)
 	}
 }
 
+static void create_gpio(LagunaSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	int irq = apu_irqmap[VIRT_GPIO];
+	hwaddr base = base_memmap[VIRT_GPIO].base;
+	hwaddr size = base_memmap[VIRT_GPIO].size;
+	DeviceState *gicdev = DEVICE(&s->apu.gic);
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(s->apu.peri.gpios); i++) {
+		char *name = g_strdup_printf("gpio%d", i);
+		DeviceState *dev;
+		MemoryRegion *mr;
+
+		object_initialize_child(OBJECT(s), name, &s->apu.peri.gpios[i],
+								TYPE_DWAPB_GPIO);
+		dev = DEVICE(&s->apu.peri.gpios[i]);
+		dev->id = g_strdup_printf("gpio%d", i);
+		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+		mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+		memory_region_add_subregion(sysmem, base, mr);
+
+		sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+							qdev_get_gpio_in(gicdev, irq));
+
+		base += size;
+		irq += 2;
+		g_free(name);
+	}
+}
+
 static void create_uart(LagunaSoC *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
@@ -373,6 +405,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 
 	create_apu(s);
 	create_gic(s);
+	create_gpio(s);
 	create_uart(s);
 	create_emmc(s);
 	create_spi(s);

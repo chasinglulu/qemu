@@ -32,6 +32,7 @@
 #include "target/arm/cpu.h"
 #include "hw/sd/sdhci.h"
 #include "hw/ssi/designware_spi.h"
+#include "hw/gpio/dwapb_gpio.h"
 
 #define TYPE_LUA_SOC "laguna-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(LagunaSoC, LUA_SOC)
@@ -64,6 +65,7 @@ enum {
 	VIRT_GIC_VCPU,
 	VIRT_EMMC,
 	VIRT_EMAC,
+	VIRT_GPIO,
 	VIRT_UART,
 	VIRT_SPI,
 	VIRT_OCM_NPU,
@@ -81,6 +83,7 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_GIC_VCPU]          =    { 0x08006000, 0x00002000 },
 	[VIRT_EMMC]              =    { 0x0C010000, 0x00002000 },
 	[VIRT_EMAC]              =    { 0x0E014000, 0x00004000 },
+	[VIRT_GPIO]              =    { 0x0E400000, 0x00001000 },
 	[VIRT_UART]              =    { 0x0E403000, 0x00001000 },
 	[VIRT_SPI]               =    { 0x0C040000, 0x00001000 },
 	[VIRT_OCM_NPU]           =    { 0x14000000, 0x00200000 },
@@ -99,6 +102,7 @@ static const MemMapEntry unimp_memmap[] = {
 static const int apu_irqmap[] = {
 	[VIRT_EMMC] = 0,
 	[VIRT_SPI] = 3,
+	[VIRT_GPIO] = 162,
 	[VIRT_UART] = 166,
 	[VIRT_EMAC] = 164,
 };
@@ -113,6 +117,7 @@ struct LagunaSoC {
 			DWUARTState uarts[LUA_SOC_NR_APU_UARTS];
 			SDHCIState mmc[LUA_SOC_NR_SDHCI];
 			DWSPIState spi[LUA_SOC_NR_SPI];
+			DWAPBGPIOState gpios[LUA_SOC_NR_GPIO];
 		} peri;
 
 		ARMCPU cpus[LUA_SOC_NR_ACPUS];
