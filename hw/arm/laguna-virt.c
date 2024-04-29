@@ -354,7 +354,7 @@ static void fdt_add_sdhci_nodes(const LagunaVirt *vms)
 	hwaddr base = base_memmap[VIRT_EMMC].base;
 	hwaddr size = base_memmap[VIRT_EMMC].size;
 	int irq = apu_irqmap[VIRT_EMMC];
-	const char compat[] = "ax,lambert-sdhci";
+	const char compat[] = "axera,lua-dwcmshc";
 	int i;
 
 	/* Create nodes in incremental address */
