@@ -94,6 +94,14 @@ static uint64_t dwapb_gpio_read(void *opaque, hwaddr offset, unsigned int size)
         r = s->portd_dr;
         break;
 
+    case DWAPB_GPIO_REG_PORTD_DDR:
+        r = s->portd_ddr;
+        break;
+
+    case DWAPB_GPIO_REG_PORTD_CTL:
+        r = s->portd_ctl;
+        break;
+
     case DWAPB_GPIO_REG_INTEN:
         r = s->inten;
         break;
