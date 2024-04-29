@@ -19,7 +19,7 @@ typedef struct DWAPBGPIOState DWAPBGPIOState;
 DECLARE_INSTANCE_CHECKER(DWAPBGPIOState, DWAPB_GPIO,
                          TYPE_DWAPB_GPIO)
 
-#define DWAPB_GPIO_PINS 32
+#define DWAPB_GPIO_PINS 128
 
 #define DWAPB_GPIO_SIZE 0x100   /* memory-mapped IO size*/
 

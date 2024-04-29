@@ -23,7 +23,7 @@ static void update_state(DWAPBGPIOState *s)
     bool prev_ival, inten, in_mask, int_pol;
     bool trigger_int = false;
 
-    for(i = 0; i < s->ngpio; i++) {
+    for(i = 0; i < 32; i++) {
         prev_ival = extract32(s->ext_porta, i, 1);
         inten = extract32(s->inten, i, 1);
         in_mask = extract32(s->intmask, i, 1);
@@ -337,23 +337,40 @@ static const MemoryRegionOps gpio_ops = {
     .impl.max_access_size = 4,
 };
 
-static void dwapb_gpio_set(void *opaque, int line, int value)
+static void dwapb_gpio_set_input(void *opaque, int line, int value)
 {
     DWAPBGPIOState *s = DWAPB_GPIO(opaque);
     bool inten, int_pol;
 
-    trace_dwapb_gpio_set(line, value);
+    trace_dwapb_gpio_set_input(line, value);
 
     assert(line >= 0 && line < DWAPB_GPIO_PINS);
 
-    inten = extract32(s->inten, line, 1);
-    int_pol = extract32(s->int_polarity, line, 1);
+    switch (line) {
+    case 0 ... 31:
+        s->ext_porta = deposit32(s->ext_porta, line % 32, 1, !!value);
+        break;
+    case 32 ... 63:
+        s->ext_portb = deposit32(s->ext_portb, line % 32, 1, !!value);
+        break;
+    case 64 ... 95:
+        s->ext_portc = deposit32(s->ext_portc, line % 32, 1, !!value);
+        break;
+    case 96 ... 127:
+        s->ext_portd = deposit32(s->ext_portd, line % 32, 1, !!value);
+        break;
+    };
 
-    if (inten) {
-        s->ext_porta = deposit32(s->ext_porta, line, 1, int_pol? !!value: !value);
+    if (line < 32) {
+        inten = extract32(s->inten, line, 1);
+        int_pol = extract32(s->int_polarity, line, 1);
+
+        if (inten) {
+            s->ext_porta = deposit32(s->ext_porta, line, 1,
+                        int_pol? !!value: !value);
+            update_state(s);
+        }
     }
-
-    update_state(s);
 }
 
 static void dwapb_gpio_reset(DeviceState *dev)
@@ -447,7 +464,7 @@ static void dwapb_gpio_realize(DeviceState *dev, Error **errp)
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->mmio);
     sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
 
-    qdev_init_gpio_in(DEVICE(s), dwapb_gpio_set, s->ngpio);
+    qdev_init_gpio_in(DEVICE(s), dwapb_gpio_set_input, s->ngpio);
     qdev_init_gpio_out(DEVICE(s), s->output, s->ngpio);
 }
 
