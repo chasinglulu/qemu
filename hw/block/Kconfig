@@ -31,6 +31,9 @@ config ONENAND
 config TC58128
     bool
 
+config SSI_TC58CXG
+    bool
+
 config VIRTIO_BLK
     bool
     default y

@@ -83,3 +83,21 @@ m25p80_read_data(void *s, uint32_t pos, uint8_t v) "[%p] Read data 0x%"PRIx32"=0
 m25p80_read_sfdp(void *s, uint32_t addr, uint8_t v) "[%p] Read SFDP 0x%"PRIx32"=0x%"PRIx8
 m25p80_binding(void *s) "[%p] Binding to IF_MTD drive"
 m25p80_binding_no_bdrv(void *s) "[%p] No BDRV - binding to RAM"
+
+# tc58cxg.c
+tc58cxg_flash_erase(void *s, int offset, uint32_t len) "[%p] offset = 0x%"PRIx32", len = %u"
+tc58cxg_programming_zero_to_one(void *s, uint32_t addr, uint8_t prev, uint8_t data) "[%p] programming zero to one! addr=0x%"PRIx32"  0x%"PRIx8" -> 0x%"PRIx8
+tc58cxg_reset_done(void *s) "[%p] Reset done."
+tc58cxg_command_decoded(void *s, uint32_t cmd) "[%p] new command:0x%"PRIx32
+tc58cxg_complete_collecting(void *s, uint32_t cmd, int n, uint32_t cur_addr) "[%p] decode cmd: 0x%"PRIx32" len %d addr 0x%"PRIx32
+tc58cxg_populated_jedec(void *s) "[%p] populated jedec code"
+tc58cxg_chip_erase(void *s) "[%p] chip erase"
+tc58cxg_select(void *s, const char *what) "[%p] %sselect"
+tc58cxg_page_program(void *s, uint32_t addr, uint8_t tx) "[%p] page program cur_addr=0x%"PRIx32" data=0x%"PRIx8
+tc58cxg_load_page(void *s, uint32_t blk, uint32_t page, uint64_t offset, uint64_t oob_off) "[%p] page load block=0x%"PRIx32" page=0x%"PRIx32" offset=0x%"PRIx64" oob offset=0x%"PRIx64
+tc58cxg_flash_write(void *s, uint32_t blk, uint32_t page, uint64_t offset, uint64_t oob_off) "[%p] flash write block=0x%"PRIx32" page=0x%"PRIx32" offset=0x%"PRIx64" oob offset=0x%"PRIx64
+tc58cxg_transfer(void *s, uint8_t state, uint32_t len, uint8_t needed, uint32_t pos, uint32_t cur_addr, uint8_t t) "[%p] Transfer state 0x%"PRIx8" len 0x%"PRIx32" needed 0x%"PRIx8" pos 0x%"PRIx32" addr 0x%"PRIx32" tx 0x%"PRIx8
+tc58cxg_read_byte(void *s, uint32_t addr, uint8_t v) "[%p] Read byte 0x%"PRIx32"=0x%"PRIx8
+tc58cxg_read_data(void *s, uint32_t pos, uint8_t v) "[%p] Read data 0x%"PRIx32"=0x%"PRIx8
+tc58cxg_binding(void *s) "[%p] Binding to IF_MTD drive"
+tc58cxg_binding_no_bdrv(void *s) "[%p] No BDRV - binding to RAM"
