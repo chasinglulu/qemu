@@ -95,6 +95,8 @@ static const MemMapEntry base_memmap[] = {
 static const MemMapEntry unimp_memmap[] = {
 	/* sec_glb_0 region */
 	{ 0x18000000, 0x1000 },
+	/* periph_glb region */
+	{ 0x0E000000, 0x1000 },
 	/* periph_ck_rst region */
 	{ 0x0E001000, 0x1000 },
 	/* gtmr_cnt region */
