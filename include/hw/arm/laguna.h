@@ -33,6 +33,7 @@
 #include "hw/sd/sdhci.h"
 #include "hw/ssi/designware_spi.h"
 #include "hw/gpio/dwapb_gpio.h"
+#include "hw/net/dwc_eth_qos.h"
 
 #define TYPE_LUA_SOC "laguna-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(LagunaSoC, LUA_SOC)
@@ -103,9 +104,9 @@ static const MemMapEntry unimp_memmap[] = {
 static const int apu_irqmap[] = {
 	[VIRT_EMMC] = 0,
 	[VIRT_SPI] = 3,
-	[VIRT_GPIO] = 162,
-	[VIRT_UART] = 166,
-	[VIRT_EMAC] = 164,
+	[VIRT_GPIO] = 164,
+	[VIRT_UART] = 168,
+	[VIRT_EMAC] = 160,
 };
 
 struct LagunaSoC {
@@ -119,6 +120,7 @@ struct LagunaSoC {
 			SDHCIState mmc[LUA_SOC_NR_SDHCI];
 			DWSPIState spi[LUA_SOC_NR_SPI];
 			DWAPBGPIOState gpios[LUA_SOC_NR_GPIO];
+			DesignwareEtherQoSState eqos;
 		} peri;
 
 		ARMCPU cpus[LUA_SOC_NR_ACPUS];
