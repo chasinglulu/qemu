@@ -235,6 +235,26 @@ static void create_uart(LagunaSoC *s)
 	}
 }
 
+static bool flash_model_valid(const char *model)
+{
+	GSList *list, *elt;
+
+	list = object_class_get_list_sorted(TYPE_DEVICE, false);
+
+	for (elt = list; elt; elt = elt->next) {
+		DeviceClass *dc = OBJECT_CLASS_CHECK(DeviceClass, elt->data, TYPE_DEVICE);
+		const char *name = object_class_get_name(OBJECT_CLASS(dc));
+
+		if (!dc->bus_type || strncmp("SSI", dc->bus_type, 3))
+			continue;
+
+		if (strcmp(name, model) == 0)
+			return true;
+	}
+
+	return false;
+}
+
 static void create_spi_flash(LagunaSoC *s)
 {
 	BusState *spi_bus;
@@ -242,8 +262,13 @@ static void create_spi_flash(LagunaSoC *s)
 	qemu_irq cs_line;
 	DriveInfo *dinfo = drive_get(IF_MTD, 0, 0);
 
+	if (!flash_model_valid(s->cfg.flash_model)) {
+		error_report("Flash model %s not supported", s->cfg.flash_model);
+		exit(1);
+	}
+
 	spi_bus = BUS(s->apu.peri.spi[0].spi);
-	flash_dev = qdev_new("sst25vf032b");
+	flash_dev = qdev_new(s->cfg.flash_model);
 	if (dinfo) {
 		qdev_prop_set_drive_err(flash_dev, "drive",
 						blk_by_legacy_dinfo(dinfo), &error_fatal);
@@ -466,6 +491,7 @@ static Property lua_soc_properties[] = {
 	DEFINE_PROP_BOOL("has-emmc", LagunaSoC, cfg.has_emmc, false),
 	DEFINE_PROP_UINT8("part-config", LagunaSoC, cfg.part_config, 0x0),
 	DEFINE_PROP_UINT8("bootmode", LagunaSoC, cfg.bootmode, 0x0),
+	DEFINE_PROP_STRING("flash-model", LagunaSoC, cfg.flash_model),
 	DEFINE_PROP_END_OF_LIST()
 };
 
