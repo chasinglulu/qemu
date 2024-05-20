@@ -458,6 +458,14 @@ static void create_bootmode(LagunaSoC *s)
 	}
 }
 
+static void create_download(LagunaSoC *s)
+{
+	qemu_irq irq;
+
+	irq = qdev_get_gpio_in(DEVICE(&s->apu.peri.gpios[0]), 3);
+	qdev_connect_gpio_out(DEVICE(s), 3, irq);
+}
+
 static void lua_soc_realize(DeviceState *dev, Error **errp)
 {
 	LagunaSoC *s = LUA_SOC(dev);
@@ -483,6 +491,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_spi_flash(s);
 
 	create_bootmode(s);
+	create_download(s);
 }
 
 static Property lua_soc_properties[] = {
@@ -492,6 +501,7 @@ static Property lua_soc_properties[] = {
 	DEFINE_PROP_UINT8("part-config", LagunaSoC, cfg.part_config, 0x0),
 	DEFINE_PROP_UINT8("bootmode", LagunaSoC, cfg.bootmode, 0x0),
 	DEFINE_PROP_STRING("flash-model", LagunaSoC, cfg.flash_model),
+	DEFINE_PROP_BOOL("download", LagunaSoC, cfg.download, false),
 	DEFINE_PROP_END_OF_LIST()
 };
 
@@ -505,6 +515,9 @@ static void lua_soc_reset(DeviceState *dev)
 			qemu_set_irq(s->output[i],
 						extract32(s->cfg.bootmode, i, 1));
 	}
+
+	if (s->cfg.download)
+		qemu_set_irq(s->download, s->cfg.download);
 }
 
 static void lua_soc_class_init(ObjectClass *klass, void *data)
@@ -534,6 +547,7 @@ static void lua_soc_init(Object *obj)
 	LagunaSoC *s = LUA_SOC(obj);
 
 	qdev_init_gpio_out(DEVICE(s), s->output, LUA_BOOTSTRAP_PINS);
+	qdev_init_gpio_out(DEVICE(s), &s->download, 1);
 }
 
 static const TypeInfo lua_soc_info = {

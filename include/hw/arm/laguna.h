@@ -136,6 +136,8 @@ struct LagunaSoC {
 
 	/* Bootstrap PIN */
 	qemu_irq output[LUA_BOOTSTRAP_PINS];
+	/* download PIN */
+	qemu_irq download;
 
 	struct {
 		MemoryRegion *mr_ddr;
@@ -145,6 +147,7 @@ struct LagunaSoC {
 		bool virt;
 		bool secure;
 		char *flash_model;
+		bool download;
 	} cfg;
 };
 

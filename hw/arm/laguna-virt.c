@@ -56,6 +56,7 @@ struct LagunaVirt {
 		uint8_t part_config;
 		uint8_t bootmode;
 		const char *flash_model;
+		bool download;
 	} cfg;
 };
 
@@ -71,6 +72,13 @@ static void lua_virt_set_emmc(Object *obj, bool value, Error **errp)
 	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
 
 	s->cfg.has_emmc = value;
+}
+
+static void lua_virt_set_download(Object *obj, bool value, Error **errp)
+{
+	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
+
+	s->cfg.download = value;
 }
 
 static void lua_virt_set_part_config(Object *obj, Visitor *v,
@@ -620,6 +628,10 @@ static void lua_virt_mach_init(MachineState *machine)
 		object_property_set_str(OBJECT(&vms->lua), "flash-model",
 								vms->cfg.flash_model, &error_abort);
 
+	if (vms->cfg.download)
+		object_property_set_bool(OBJECT(&vms->lua), "download",
+								vms->cfg.download, &error_abort);
+
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->lua), &error_fatal);
 
 	create_fdt(vms);
@@ -688,6 +700,8 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 		NULL, NULL);
 	object_class_property_add_str(oc, "flash", NULL,
 					lmt_virt_set_flash_model);
+	object_class_property_add_bool(oc, "download", NULL,
+					lua_virt_set_download);
 }
 
 static const TypeInfo lua_virt_mach_info = {
