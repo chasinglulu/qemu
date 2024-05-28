@@ -162,7 +162,7 @@ static void designware_spi_reset(DeviceState *d)
 	designware_spi_update_irq(s);
 }
 
-static void designware_spi_flush_txfifo(DWSPIState *s)
+static void designware_spi_xfer(DWSPIState *s)
 {
 	uint32_t tx;
 	uint32_t rx;
@@ -199,10 +199,34 @@ static void designware_spi_flush_txfifo(DWSPIState *s)
 	}
 }
 
-static void designware_spi_flush_tx_rxfifo(DWSPIState *s)
+static void designware_spi_fill_rxfifo(DWSPIState *s)
+{
+	uint32_t rx;
+
+	while (s->regs[R_CTRL1]) {
+		s->regs[R_STAT] |= SR_BUSY;
+		rx = ssi_transfer(s->spi, 0);
+		s->regs[R_STAT] &= ~SR_BUSY;
+
+		if (fifo32_is_full(&s->rx_fifo))
+			break;
+
+		s->regs[R_STAT] &= ~SR_RF_FULL;
+		fifo32_push(&s->rx_fifo, rx);
+		s->regs[R_RXFL] = fifo32_num_used(&s->rx_fifo);
+		s->regs[R_STAT] |= SR_RF_NOT_EMPT;
+		s->regs[R_CTRL1]--;
+	}
+
+	if (fifo32_is_full(&s->rx_fifo)) {
+		s->regs[R_STAT] |= SR_RF_FULL;
+		designware_spi_update_irq(s);
+	}
+}
+
+static void designware_spi_flush_txfifo(DWSPIState *s)
 {
 	uint32_t tx;
-	uint32_t rx;
 
 	while (!fifo32_is_empty(&s->tx_fifo)) {
 		if (!(s->regs[R_SSIEN] & BIT(0)))
@@ -217,28 +241,6 @@ static void designware_spi_flush_tx_rxfifo(DWSPIState *s)
 
 	if (fifo32_is_empty(&s->tx_fifo)) {
 		s->regs[R_STAT] |= SR_TF_EMPT;
-		designware_spi_update_irq(s);
-	}
-
-	while (s->regs[R_CTRL1]) {
-		s->regs[R_STAT] |= SR_BUSY;
-		rx = ssi_transfer(s->spi, 0);
-		s->regs[R_STAT] &= ~SR_BUSY;
-
-		if (!fifo32_is_full(&s->rx_fifo)) {
-			s->regs[R_STAT] &= ~SR_RF_FULL;
-			fifo32_push(&s->rx_fifo, rx);
-			s->regs[R_RXFL] = fifo32_num_used(&s->rx_fifo);
-			s->regs[R_STAT] |= SR_RF_NOT_EMPT;
-		} else {
-			s->regs[R_STAT] |= SR_RF_FULL;
-			designware_spi_update_irq(s);
-		}
-		s->regs[R_CTRL1]--;
-	}
-
-	if (fifo32_is_full(&s->rx_fifo)) {
-		s->regs[R_STAT] |= SR_RF_FULL;
 		designware_spi_update_irq(s);
 	}
 }
@@ -296,7 +298,12 @@ static uint64_t designware_spi_read(void *opaque, hwaddr addr, unsigned int size
 			s->regs[R_STAT] &= ~SR_RF_NOT_EMPT;
 
 		break;
+	case R_RXFL:
+		if (!s->regs[R_RXFL] && s->regs[R_CTRL1])
+			designware_spi_fill_rxfifo(s);
 
+		r = s->regs[addr];
+		break;
 	default:
 		r = s->regs[addr];
 		break;
@@ -357,12 +364,12 @@ static void designware_spi_write(void *opaque, hwaddr addr,
 				designware_spi_update_cs(s);
 
 				if (s->regs[R_CTRL1] > 0 && !!value)
-					designware_spi_flush_tx_rxfifo(s);
+					designware_spi_flush_txfifo(s);
 
 				if (fifo32_num_used(&s->tx_fifo) >=
 					(s->regs[R_TXFTL] & TXFTLR_TXFTHR_MASK) >> TXFTLR_TXFTHR_OFFSET
 					&& !s->regs[R_CTRL1] && !!value)
-						designware_spi_flush_txfifo(s);
+						designware_spi_xfer(s);
 			}
 		}
 		break;
