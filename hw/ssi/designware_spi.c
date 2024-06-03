@@ -24,6 +24,7 @@
 #include "qemu/log.h"
 #include "qemu/module.h"
 #include "hw/ssi/designware_spi.h"
+#include "qapi/error.h"
 #include "trace.h"
 
 #define R_CTRL0        (0x00 / 4)
@@ -75,6 +76,22 @@
 
 #define IMR_MASK              MAKE_64BIT_MASK(0, 7)
 
+static uint8_t ssi_op_len;
+static bool need_wait_cycle = false;
+
+static uint8_t get_flash_dummy_cycles(DWSPIState *s)
+{
+	int64_t needed_bytes = 0;;
+	DeviceState *flash_dev = (DeviceState *)s->flash_dev;
+
+
+	if (flash_dev)
+		needed_bytes = object_property_get_int(OBJECT(flash_dev),
+		                    "needed-bytes", &error_fatal);
+
+	return needed_bytes;
+}
+
 static void designware_spi_txfifo_reset(DWSPIState *s)
 {
 	fifo32_reset(&s->tx_fifo);
@@ -99,9 +116,12 @@ static void designware_spi_update_cs(DWSPIState *s)
 
 	for (i = 0; i < s->num_cs; i++) {
 		if (s->regs[R_SE] & (1 << i)) {
+			/* select slave */
 			qemu_set_irq(s->cs_lines[i], 0);
+			need_wait_cycle = true;
 		} else {
 			qemu_set_irq(s->cs_lines[i], 1);
+			need_wait_cycle = false;
 		}
 	}
 }
@@ -202,14 +222,27 @@ static void designware_spi_xfer(DWSPIState *s)
 static void designware_spi_fill_rxfifo(DWSPIState *s)
 {
 	uint32_t rx;
+	uint32_t wait_cycles = get_flash_dummy_cycles(s);
+
+	qemu_log_mask(LOG_STRACE, "%s: wait_cycles: %u, ssi_op_len: %d\n",
+	                       __func__, wait_cycles, ssi_op_len);
+	if (wait_cycles >= ssi_op_len - 1)
+		wait_cycles -= (ssi_op_len - 1);
+	qemu_log_mask(LOG_STRACE, "%s: wait_cycles: %u\n", __func__, wait_cycles);
+	while(wait_cycles > 0 && need_wait_cycle) {
+		ssi_transfer(s->spi, 0xff);
+		wait_cycles--;
+	}
+	need_wait_cycle = false;
+	ssi_op_len = 0;
 
 	while (s->regs[R_CTRL1]) {
+		if (fifo32_is_full(&s->rx_fifo))
+			break;
+
 		s->regs[R_STAT] |= SR_BUSY;
 		rx = ssi_transfer(s->spi, 0);
 		s->regs[R_STAT] &= ~SR_BUSY;
-
-		if (fifo32_is_full(&s->rx_fifo))
-			break;
 
 		s->regs[R_STAT] &= ~SR_RF_FULL;
 		fifo32_push(&s->rx_fifo, rx);
@@ -237,6 +270,7 @@ static void designware_spi_flush_txfifo(DWSPIState *s)
 		s->regs[R_STAT] |= SR_BUSY;
 		ssi_transfer(s->spi, tx);
 		s->regs[R_STAT] &= ~SR_BUSY;
+		ssi_op_len++;
 	}
 
 	if (fifo32_is_empty(&s->tx_fifo)) {
@@ -459,6 +493,7 @@ static void designware_spi_realize(DeviceState *dev, Error **errp)
 static Property designware_spi_properties[] = {
 	DEFINE_PROP_UINT32("num-cs", DWSPIState, num_cs, 1),
 	DEFINE_PROP_UINT32("fifo-depth", DWSPIState, fifo_depth, 64),
+	DEFINE_PROP_UINT64("flash-dev", DWSPIState, flash_dev, 0x0),
 	DEFINE_PROP_END_OF_LIST(),
 };
 

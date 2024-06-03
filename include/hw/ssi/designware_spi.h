@@ -27,6 +27,7 @@
 
 typedef struct DWSPIState {
 	SysBusDevice parent_obj;
+	uint64_t flash_dev;
 
 	MemoryRegion mmio;
 	qemu_irq irq;

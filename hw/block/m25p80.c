@@ -1483,6 +1483,7 @@ static int m25p80_cs(SSIPeripheral *ss, bool select)
         s->len = 0;
         s->pos = 0;
         s->state = STATE_IDLE;
+        s->needed_bytes = 0;
         flash_sync_dirty(s, -1);
         s->data_read_loop = false;
     }
@@ -1658,6 +1659,7 @@ static Property m25p80_properties[] = {
     DEFINE_PROP_UINT8("spansion-cr2nv", Flash, spansion_cr2nv, 0x8),
     DEFINE_PROP_UINT8("spansion-cr3nv", Flash, spansion_cr3nv, 0x2),
     DEFINE_PROP_UINT8("spansion-cr4nv", Flash, spansion_cr4nv, 0x10),
+    DEFINE_PROP_UINT8("needed-bytes", Flash, needed_bytes, 0),
     DEFINE_PROP_DRIVE("drive", Flash, blk),
     DEFINE_PROP_END_OF_LIST(),
 };
