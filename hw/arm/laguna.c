@@ -255,38 +255,35 @@ static bool flash_model_valid(const char *model)
 	return false;
 }
 
-static void create_spi_flash(LagunaSoC *s)
+static DeviceState* create_nor_flash(LagunaSoC *s, int bus)
 {
-	BusState *spi_bus;
-	DeviceState *flash_dev;
-	qemu_irq cs_line;
-	DriveInfo *dinfo = drive_get(IF_MTD, 0, 0);
+	static DeviceState *flash_dev;
+	DriveInfo *dinfo = drive_get(IF_MTD, bus, 0);
 
 	if (!flash_model_valid(s->cfg.flash_model)) {
 		error_report("Flash model %s not supported", s->cfg.flash_model);
 		exit(1);
 	}
 
-	spi_bus = BUS(s->apu.peri.spi[0].spi);
 	flash_dev = qdev_new(s->cfg.flash_model);
 	if (dinfo) {
 		qdev_prop_set_drive_err(flash_dev, "drive",
 						blk_by_legacy_dinfo(dinfo), &error_fatal);
 	}
-	qdev_realize_and_unref(flash_dev, spi_bus, &error_fatal);
 
-	cs_line = qdev_get_gpio_in_named(flash_dev, SSI_GPIO_CS, 0);
-
-	sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.spi[0]), 1, cs_line);
+	return flash_dev;
 }
 
-static void create_spi(LagunaSoC *s)
+static void create_spi_nor_flash(LagunaSoC *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
 	int irq = apu_irqmap[VIRT_SPI];
 	hwaddr base = base_memmap[VIRT_SPI].base;
 	hwaddr size = base_memmap[VIRT_SPI].size;
 	DeviceState *gicdev = DEVICE(&s->apu.gic);
+	DeviceState *flash_dev;
+	BusState *spi_bus;
+	qemu_irq cs_line;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(s->apu.peri.spi); i++) {
@@ -297,16 +294,25 @@ static void create_spi(LagunaSoC *s)
 		object_initialize_child(OBJECT(s), name, &s->apu.peri.spi[i],
 								TYPE_DESIGNWARE_SPI);
 		dev = DEVICE(&s->apu.peri.spi[i]);
+		flash_dev = create_nor_flash(s, i);
+		qdev_prop_set_uint64(dev, "flash-dev", (uint64_t)flash_dev);
 		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
 		mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
 		memory_region_add_subregion(sysmem, base, mr);
 
 		sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
-
 		base += size;
 		irq += 1;
 		g_free(name);
+
+		/* flash memory */
+		spi_bus = BUS(s->apu.peri.spi[i].spi);
+		qdev_realize_and_unref(flash_dev, spi_bus, &error_fatal);
+
+		cs_line = qdev_get_gpio_in_named(flash_dev, SSI_GPIO_CS, 0);
+
+		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.spi[i]), 1, cs_line);
 	}
 }
 
@@ -477,7 +483,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_uart(s);
 	create_ethernet(s);
 	create_emmc(s);
-	create_spi(s);
+	create_spi_nor_flash(s);
 	create_ddr_memmap(s);
 	create_unimp(s);
 
@@ -488,7 +494,6 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 		}
 		create_sd_card(&s->apu.peri.mmc[i], i);
 	}
-	create_spi_flash(s);
 
 	create_bootmode(s);
 	create_download(s);
