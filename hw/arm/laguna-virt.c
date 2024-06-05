@@ -56,6 +56,7 @@ struct LagunaVirt {
 		uint8_t part_config;
 		uint8_t bootmode;
 		const char *flash_model;
+		const char *nand;
 		bool download;
 	} cfg;
 };
@@ -661,8 +662,11 @@ static void lua_virt_mach_instance_init(Object *obj)
 	LagunaVirt *vms = LAGUNA_VIRT_MACHINE(obj);
 	MachineState *ms = MACHINE(vms);
 
-	/* default flash model */
+	/* default spi nor flash model */
 	vms->cfg.flash_model = "n25q032a11";
+
+	/* default spi nand flash model */
+	vms->cfg.nand = "TC58CVG2S0HRAIG";
 
 	ms->smp.cores = LUA_SOC_CLUSTER_SIZE;
 	ms->smp.clusters = LUA_SOC_CLUSTERS;

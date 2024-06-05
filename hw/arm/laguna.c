@@ -255,10 +255,10 @@ static bool flash_model_valid(const char *model)
 	return false;
 }
 
-static DeviceState* create_nor_flash(LagunaSoC *s, int bus)
+static DeviceState* create_nor_flash(LagunaSoC *s, int unit)
 {
 	static DeviceState *flash_dev;
-	DriveInfo *dinfo = drive_get(IF_MTD, bus, 0);
+	DriveInfo *dinfo = drive_get(IF_MTD, 0, unit);
 
 	if (!flash_model_valid(s->cfg.flash_model)) {
 		error_report("Flash model %s not supported", s->cfg.flash_model);
@@ -272,6 +272,20 @@ static DeviceState* create_nor_flash(LagunaSoC *s, int bus)
 	}
 
 	return flash_dev;
+}
+
+static DeviceState* create_nand_flash(LagunaSoC *s, int unit)
+{
+	static DeviceState *nand;
+	DriveInfo *dinfo = drive_get(IF_MTD, 0, unit);
+
+	nand = qdev_new("TC58CVG2S0HRAIG");
+	if (dinfo) {
+		qdev_prop_set_drive_err(nand, "drive",
+						blk_by_legacy_dinfo(dinfo), &error_fatal);
+	}
+
+	return nand;
 }
 
 static void create_spi_nor_flash(LagunaSoC *s)
@@ -295,6 +309,7 @@ static void create_spi_nor_flash(LagunaSoC *s)
 								TYPE_DESIGNWARE_SPI);
 		dev = DEVICE(&s->apu.peri.spi[i]);
 		flash_dev = create_nor_flash(s, i);
+		qdev_prop_set_uint32(dev, "num-cs", 2);
 		qdev_prop_set_uint64(dev, "flash-dev", (uint64_t)flash_dev);
 		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
@@ -306,13 +321,17 @@ static void create_spi_nor_flash(LagunaSoC *s)
 		irq += 1;
 		g_free(name);
 
-		/* flash memory */
+		/* nor flash memory */
 		spi_bus = BUS(s->apu.peri.spi[i].spi);
 		qdev_realize_and_unref(flash_dev, spi_bus, &error_fatal);
-
 		cs_line = qdev_get_gpio_in_named(flash_dev, SSI_GPIO_CS, 0);
-
 		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.spi[i]), 1, cs_line);
+
+		/* nand flash memory */
+		flash_dev = create_nand_flash(s, i+1);
+		qdev_realize_and_unref(flash_dev, spi_bus, &error_fatal);
+		cs_line = qdev_get_gpio_in_named(flash_dev, SSI_GPIO_CS, 0);
+		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.spi[i]), 2, cs_line);
 	}
 }
 
