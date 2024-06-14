@@ -93,14 +93,24 @@ static const MemMapEntry base_memmap[] = {
 };
 
 static const MemMapEntry unimp_memmap[] = {
-	/* sec_glb_0 region */
-	{ 0x18000000, 0x1000 },
-	/* periph_glb region */
-	{ 0x0E000000, 0x1000 },
 	/* periph_ck_rst region */
 	{ 0x0E001000, 0x1000 },
 	/* gtmr_cnt region */
 	{ 0x08012000, 0x1000 },
+
+	/* each subsystem global ctrl regions */
+	{ 0x06100000, 0x1000 },
+	{ 0x08010000, 0x1000 },
+	{ 0x0A001000, 0x1000 },
+	{ 0x0C000000, 0x1000 },
+	{ 0x0E000000, 0x1000 },
+	{ 0x10000000, 0x1000 },
+	{ 0x11000000, 0x1000 },
+	{ 0x12000000, 0x4000 },
+	{ 0x14300000, 0x10000 },
+	{ 0x16000000, 0x1000 },
+	{ 0x18000000, 0x1000 },
+	{ 0x18008000, 0x1000 },
 };
 
 static const int apu_irqmap[] = {
