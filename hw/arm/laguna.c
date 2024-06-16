@@ -295,10 +295,11 @@ static void create_spi_nor_flash(LagunaSoC *s)
 	hwaddr base = base_memmap[VIRT_SPI].base;
 	hwaddr size = base_memmap[VIRT_SPI].size;
 	DeviceState *gicdev = DEVICE(&s->apu.gic);
-	DeviceState *flash_dev;
+	DeviceState *nor_dev, *nand_dev;
 	BusState *spi_bus;
 	qemu_irq cs_line;
-	int i;
+	const int flash_num = 2;
+	int i, j;
 
 	for (i = 0; i < ARRAY_SIZE(s->apu.peri.spi); i++) {
 		char *name = g_strdup_printf("spi%d", i);
@@ -308,29 +309,38 @@ static void create_spi_nor_flash(LagunaSoC *s)
 		object_initialize_child(OBJECT(s), name, &s->apu.peri.spi[i],
 								TYPE_DESIGNWARE_SPI);
 		dev = DEVICE(&s->apu.peri.spi[i]);
-		flash_dev = create_nor_flash(s, i);
-		qdev_prop_set_uint32(dev, "num-cs", 2);
-		qdev_prop_set_uint64(dev, "flash-dev", (uint64_t)flash_dev);
+		qdev_prop_set_uint32(dev, "num-cs", flash_num);
+		qdev_prop_set_uint32(dev, "len-flash-dev", flash_num);
+		for (j = 0; j < flash_num; j++) {
+			char *propname = g_strdup_printf("flash-dev[%d]", j);
+			if (j)
+				nand_dev = create_nand_flash(s, j);
+			else
+				nor_dev = create_nor_flash(s, j);
+			qdev_prop_set_uint64(dev, propname, (uint64_t)(j ? nand_dev : nor_dev));
+			g_free(propname);
+		}
+
 		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
 		mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
 		memory_region_add_subregion(sysmem, base, mr);
 
-		sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+		sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+		                                qdev_get_gpio_in(gicdev, irq));
+		spi_bus = BUS(s->apu.peri.spi[i].spi);
 		base += size;
 		irq += 1;
 		g_free(name);
 
 		/* nor flash memory */
-		spi_bus = BUS(s->apu.peri.spi[i].spi);
-		qdev_realize_and_unref(flash_dev, spi_bus, &error_fatal);
-		cs_line = qdev_get_gpio_in_named(flash_dev, SSI_GPIO_CS, 0);
+		qdev_realize_and_unref(nor_dev, spi_bus, &error_fatal);
+		cs_line = qdev_get_gpio_in_named(nor_dev, SSI_GPIO_CS, 0);
 		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.spi[i]), 1, cs_line);
 
 		/* nand flash memory */
-		flash_dev = create_nand_flash(s, i+1);
-		qdev_realize_and_unref(flash_dev, spi_bus, &error_fatal);
-		cs_line = qdev_get_gpio_in_named(flash_dev, SSI_GPIO_CS, 0);
+		qdev_realize_and_unref(nand_dev, spi_bus, &error_fatal);
+		cs_line = qdev_get_gpio_in_named(nand_dev, SSI_GPIO_CS, 0);
 		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.spi[i]), 2, cs_line);
 	}
 }
