@@ -77,13 +77,19 @@
 #define IMR_MASK              MAKE_64BIT_MASK(0, 7)
 
 static uint8_t ssi_op_len;
-static bool need_wait_cycle = false;
+static uint32_t need_wait_cycle;
 
 static uint8_t get_flash_dummy_cycles(DWSPIState *s)
 {
-	int64_t needed_bytes = 0;;
-	DeviceState *flash_dev = (DeviceState *)s->flash_dev;
+	int64_t needed_bytes = 0;
+	DeviceState *flash_dev = NULL;
+	int i;
 
+	for (i =0; i < s->flash_dev_num; i++) {
+		flash_dev = (DeviceState *)s->flash_dev[i];
+		if (s->regs[R_SE] & (1 << i))
+			break;
+	}
 
 	if (flash_dev)
 		needed_bytes = object_property_get_int(OBJECT(flash_dev),
@@ -118,12 +124,15 @@ static void designware_spi_update_cs(DWSPIState *s)
 		if (s->regs[R_SE] & (1 << i)) {
 			/* select slave */
 			qemu_set_irq(s->cs_lines[i], 0);
-			need_wait_cycle = true;
+			need_wait_cycle = deposit32(need_wait_cycle, i, 1, 1);
+			ssi_op_len = 0;
 		} else {
 			qemu_set_irq(s->cs_lines[i], 1);
-			need_wait_cycle = false;
+			need_wait_cycle = deposit32(need_wait_cycle, i, 1, 0);
 		}
 	}
+	qemu_log_mask(LOG_STRACE, "%s: need_wait_cycle: %d SE: 0x%x\n",
+	                    __func__, need_wait_cycle, s->regs[R_SE]);
 }
 
 static void designware_spi_update_irq(DWSPIState *s)
@@ -228,12 +237,14 @@ static void designware_spi_fill_rxfifo(DWSPIState *s)
 	                       __func__, wait_cycles, ssi_op_len);
 	if (wait_cycles >= ssi_op_len - 1)
 		wait_cycles -= (ssi_op_len - 1);
-	qemu_log_mask(LOG_STRACE, "%s: wait_cycles: %u\n", __func__, wait_cycles);
-	while(wait_cycles > 0 && need_wait_cycle) {
+	qemu_log_mask(LOG_STRACE, "%s: wait_cycles: %u need_wait_cycle: %d\n",
+	                    __func__, wait_cycles, need_wait_cycle);
+	while(wait_cycles > 0 &&
+	      (need_wait_cycle & s->regs[R_SE])) {
 		ssi_transfer(s->spi, 0xff);
 		wait_cycles--;
 	}
-	need_wait_cycle = false;
+	need_wait_cycle = 0x00;
 	ssi_op_len = 0;
 
 	while (s->regs[R_CTRL1]) {
@@ -493,7 +504,8 @@ static void designware_spi_realize(DeviceState *dev, Error **errp)
 static Property designware_spi_properties[] = {
 	DEFINE_PROP_UINT32("num-cs", DWSPIState, num_cs, 1),
 	DEFINE_PROP_UINT32("fifo-depth", DWSPIState, fifo_depth, 64),
-	DEFINE_PROP_UINT64("flash-dev", DWSPIState, flash_dev, 0x0),
+	DEFINE_PROP_ARRAY("flash-dev", DWSPIState, flash_dev_num,
+	                            flash_dev, qdev_prop_uint64, uint64_t),
 	DEFINE_PROP_END_OF_LIST(),
 };
 
