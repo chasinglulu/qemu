@@ -675,9 +675,9 @@ void flash_write8(Flash *s, uint32_t addr, uint8_t data)
     }
 
     if (s->pi->flags & EEPROM) {
-        s->storage[s->cur_addr] = data;
-    } else {
         s->storage[s->cur_addr] &= data;
+    } else {
+        s->storage[s->cur_addr] = data;
     }
 
     flash_sync_dirty(s, page);
