@@ -368,6 +368,32 @@ static void create_ethernet(LagunaSoC *s)
 	sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
 }
 
+static void create_usb(LagunaSoC *s)
+{
+    MemoryRegion *sysmem = get_system_memory();
+    int irq = apu_irqmap[VIRT_USB];
+    hwaddr base = base_memmap[VIRT_USB].base;
+    DeviceState *gicdev = DEVICE(&s->apu.gic);
+    DeviceState *dev;
+    MemoryRegion *mr;
+    USBDWC3 *usbc;
+
+    object_initialize_child(OBJECT(s), "usb", &s->apu.peri.usb,
+                            TYPE_USB_DWC3);
+    usbc = &s->apu.peri.usb;
+    dev = DEVICE(usbc);
+
+    qdev_prop_set_uint32(dev, "intrs", 1);
+    qdev_prop_set_uint32(dev, "slots", 2);
+    sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+    memory_region_add_subregion(sysmem, base, mr);
+
+    sysbus_connect_irq(SYS_BUS_DEVICE(&usbc->sysbus_xhci), 0,
+                            qdev_get_gpio_in(gicdev, irq));
+}
+
 static void create_emmc(LagunaSoC *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
@@ -511,6 +537,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_gpio(s);
 	create_uart(s);
 	create_ethernet(s);
+	create_usb(s);
 	create_emmc(s);
 	create_spi_nor_flash(s);
 	create_ddr_memmap(s);

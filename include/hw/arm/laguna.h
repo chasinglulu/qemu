@@ -34,6 +34,7 @@
 #include "hw/ssi/designware_spi.h"
 #include "hw/gpio/dwapb_gpio.h"
 #include "hw/net/dwc_eth_qos.h"
+#include "hw/usb/hcd-dwc3.h"
 
 #define TYPE_LUA_SOC "laguna-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(LagunaSoC, LUA_SOC)
@@ -67,6 +68,7 @@ enum {
 	VIRT_GIC_VCPU,
 	VIRT_EMMC,
 	VIRT_EMAC,
+	VIRT_USB,
 	VIRT_GPIO,
 	VIRT_UART,
 	VIRT_SPI,
@@ -85,6 +87,7 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_GIC_VCPU]          =    { 0x08006000, 0x00002000 },
 	[VIRT_EMMC]              =    { 0x0C010000, 0x00002000 },
 	[VIRT_EMAC]              =    { 0x0E014000, 0x00004000 },
+	[VIRT_USB]               =    { 0x0E200000, 0x00200000 },
 	[VIRT_GPIO]              =    { 0x0E400000, 0x00001000 },
 	[VIRT_UART]              =    { 0x0E403000, 0x00001000 },
 	[VIRT_SPI]               =    { 0x0C040000, 0x00001000 },
@@ -95,6 +98,8 @@ static const MemMapEntry base_memmap[] = {
 static const MemMapEntry unimp_memmap[] = {
 	/* gtmr_cnt region */
 	{ 0x08012000, 0x1000 },
+	/* USB PHY */
+	{ 0x0E100000, 0x100000 },
 
 	/* each subsystem global ctrl regions */
 	{ 0x06100000, 0x1000 },
@@ -145,6 +150,7 @@ struct LagunaSoC {
 			DWSPIState spi[LUA_SOC_NR_SPI];
 			DWAPBGPIOState gpios[LUA_SOC_NR_GPIO];
 			DesignwareEtherQoSState eqos;
+			USBDWC3 usb;
 		} peri;
 
 		ARMCPU cpus[LUA_SOC_NR_ACPUS];
