@@ -34,7 +34,7 @@
 #define USB_DWC3(obj) \
      OBJECT_CHECK(USBDWC3, (obj), TYPE_USB_DWC3)
 
-#define USB_DWC3_R_MAX ((0x624 / 4) + 1)
+#define USB_DWC3_R_MAX ((0x800 / 4) + 1)
 #define DWC3_SIZE 0x10000
 
 typedef struct USBDWC3 {
@@ -49,6 +49,16 @@ typedef struct USBDWC3 {
         uint8_t     mode;
         uint32_t    dwc_usb3_user;
     } cfg;
+
+    /* device DMA */
+    MemoryRegion *dma_mr;
+    AddressSpace *as;
+    uint epnum;
+    int fd;
+    QemuThread ep0_loop_thread;
+    bool stop_thread;
+    QemuMutex wkup_mutex;
+    QemuCond wkup_cond;
 
 } USBDWC3;
 
