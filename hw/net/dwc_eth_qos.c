@@ -1765,7 +1765,7 @@ static void dwc_ether_qos_realize(DeviceState *dev, Error **errp)
 	int i;
 
 	address_space_init(&s->dma_as,
-						s->dma_mr ? s->dma_mr : get_system_memory(), "dma");
+						s->dma_mr ? s->dma_mr : get_system_memory(), "dwc-eqos-dma");
 
 	if (s->num_priority_queues == 0 ||
 		s->num_priority_queues > MAX_PRIORITY_QUEUES) {
