@@ -31,6 +31,7 @@
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
 #include "hw/sd/sdhci.h"
+#include "hw/net/dwc_eth_qos.h"
 #include "hw/timer/cadence_ttc.h"
 
 #define TYPE_LUA_SAFETY "laguna-safety-island"
@@ -105,6 +106,7 @@ struct LagunaSafety {
 		struct {
 			DWUARTState uarts[LUA_SAFETY_NR_MPU_UARTS];
 			CadenceTTCState ttc[LUA_SAFETY_NR_TIMER];
+			DesignwareEtherQoSState eqos;
 		} peri;
 
 		ARMCPU cpus[LUA_SAFETY_NR_MCPUS];
