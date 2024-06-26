@@ -48,7 +48,18 @@ struct LuaSafetyVirt {
 	uint32_t msi_phandle;
 	int psci_conduit;
 	struct arm_boot_info bootinfo;
+
+	struct {
+		bool lockstep;
+	} cfg;
 };
+
+static void lua_virt_set_lockstep(Object *obj, bool value, Error **errp)
+{
+	LuaSafetyVirt *s = LUA_SAFETY_VIRT_MACHINE(obj);
+
+	s->cfg.lockstep = value;
+}
 
 static void create_fdt(LuaSafetyVirt *s)
 {
@@ -131,6 +142,9 @@ static void fdt_add_cpu_nodes(const LuaSafetyVirt *vms)
 	MachineState *ms = MACHINE(vms);
 	int smp_cpus = ms->smp.cpus;
 
+	if (vms->cfg.lockstep)
+		smp_cpus >>= 1;
+
 	/*
 	 * See Linux Documentation/devicetree/bindings/arm/cpus.yaml
 	 * On ARM v8 64-bit systems value should be set to 2,
@@ -189,7 +203,7 @@ static void fdt_add_gic_node(LuaSafetyVirt *vms)
 	qemu_fdt_setprop_cell(vms->fdt, "/", "interrupt-parent", vms->gic_phandle);
 
 	nodename = g_strdup_printf("/gic@%" PRIx64,
-								base_memmap[VIRT_GIC_DIST].base);
+								base_memmap[VIRT_GIC1_DIST].base);
 	qemu_fdt_add_subnode(vms->fdt, nodename);
 	qemu_fdt_setprop_cell(vms->fdt, nodename, "#interrupt-cells", 3);
 	qemu_fdt_setprop(vms->fdt, nodename, "interrupt-controller", NULL, 0);
@@ -201,10 +215,10 @@ static void fdt_add_gic_node(LuaSafetyVirt *vms)
 	qemu_fdt_setprop_cell(vms->fdt, nodename,
 							"#redistributor-regions", 1);
 	qemu_fdt_setprop_sized_cells(vms->fdt, nodename, "reg",
-									1, base_memmap[VIRT_GIC_DIST].base,
-									1, base_memmap[VIRT_GIC_DIST].size,
-									1, base_memmap[VIRT_GIC_CPU].base,
-									1, base_memmap[VIRT_GIC_CPU].size);
+									1, base_memmap[VIRT_GIC1_DIST].base,
+									1, base_memmap[VIRT_GIC1_DIST].size,
+									1, base_memmap[VIRT_GIC1_CPU].base,
+									1, base_memmap[VIRT_GIC1_CPU].size);
 
 	qemu_fdt_setprop_cell(vms->fdt, nodename, "phandle", vms->gic_phandle);
 	g_free(nodename);
@@ -384,6 +398,10 @@ static void lua_virt_mach_init(MachineState *machine)
 	object_initialize_child(OBJECT(machine), "lua-safety", &vms->safety,
 							TYPE_LUA_SAFETY);
 
+	if (!vms->cfg.lockstep)
+		object_property_set_bool(OBJECT(&vms->safety), "lockstep",
+								vms->cfg.lockstep, &error_abort);
+
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->safety), &error_fatal);
 
 	create_fdt(vms);
@@ -402,13 +420,15 @@ static void lua_virt_mach_init(MachineState *machine)
 	vms->bootinfo.skip_dtb_autoload = true;
 	vms->bootinfo.psci_conduit = vms->psci_conduit;
 	arm_load_kernel(ARM_CPU(first_cpu), machine, &vms->bootinfo);
-
 	vms->machine_done.notify = lua_virt_mach_done;
 	qemu_add_machine_init_done_notifier(&vms->machine_done);
 }
 
 static void lua_virt_mach_instance_init(Object *obj)
 {
+	LuaSafetyVirt *s = LUA_SAFETY_VIRT_MACHINE(obj);
+
+	s->cfg.lockstep = true;
 }
 
 static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
@@ -417,7 +437,7 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 
 	mc->desc = "Laguna Safety Island Virtual Platform";
 	mc->init = lua_virt_mach_init;
-	mc->min_cpus = LUA_SAFETY_NR_MCPUS;
+	mc->min_cpus = LUA_SAFETY_NR_MCPUS >> 1;
 	mc->max_cpus = LUA_SAFETY_NR_MCPUS;
 	mc->default_cpus = LUA_SAFETY_NR_MCPUS;
 	mc->default_cpu_type = LUA_SAFETY_MCPU_TYPE;
@@ -425,6 +445,9 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 	mc->no_sdcard = 1;
 	mc->no_floppy = 1;
 	mc->block_default_type = IF_NONE;
+
+	object_class_property_add_bool(oc, "lockstep", NULL,
+					lua_virt_set_lockstep);
 }
 
 static const TypeInfo lua_virt_mach_info = {

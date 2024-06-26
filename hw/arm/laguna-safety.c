@@ -32,7 +32,73 @@
 #include "sysemu/blockdev.h"
 #include "hw/arm/laguna-safety.h"
 
-static void create_apu(LagunaSafety *s)
+static void create_tcm_slave_lockstep(LagunaSafety *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	hwaddr tcm0_base = base_memmap[VIRT_CORE0_TCM_SLAVE].base;
+	hwaddr tcm0_size = base_memmap[VIRT_CORE0_TCM_SLAVE].size;
+	hwaddr tcm1_base = base_memmap[VIRT_CORE1_TCM_SLAVE].base;
+	hwaddr tcm1_size = base_memmap[VIRT_CORE1_TCM_SLAVE].size;
+
+	memory_region_init_alias(&s->mr_tcm_slv[0], OBJECT(s), "mcu0_slv_128K", &s->mr_tcm[0], 0x0, tcm0_size >> 1);
+	memory_region_add_subregion(sysmem, tcm0_base, &s->mr_tcm_slv[0]);
+	create_unimplemented_device("mcu0_slv_bh_128K_rsvd", tcm0_base + (tcm0_size >> 1), tcm1_size >> 1);
+
+	create_unimplemented_device("mcu1_slv_rsvd", tcm1_base, tcm1_size);
+}
+
+static void create_apu_lockstep(LagunaSafety *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	hwaddr tcm_base = base_memmap[VIRT_TCM].base;
+	hwaddr tcm_size = base_memmap[VIRT_TCM].size;
+	Object *cpuobj;
+	const char *name = "tcm0";
+
+	object_initialize_child(OBJECT(s), "mpu[*]", &s->mpu.cpus[0], LUA_SAFETY_MCPU_TYPE);
+	cpuobj = OBJECT(&s->mpu.cpus[0]);
+	object_property_set_link(cpuobj, "memory", OBJECT(sysmem), &error_abort);
+	qdev_realize(DEVICE(cpuobj), NULL, &error_fatal);
+
+	memory_region_init_ram(&s->mr_tcm[0], OBJECT(s), name, 4*tcm_size, &error_fatal);
+	memory_region_add_subregion(sysmem, tcm_base, &s->mr_tcm[0]);
+}
+
+static void create_tcm_slave_split(LagunaSafety *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	hwaddr tcm_size = base_memmap[VIRT_TCM].size;
+	hwaddr tcm0_base = base_memmap[VIRT_CORE0_TCM_SLAVE].base;
+	hwaddr tcm0_size = base_memmap[VIRT_CORE0_TCM_SLAVE].size;
+	char *name;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(s->mpu.cpus); i++) {
+		name = g_strdup_printf("mcu%d_slv_tcmA", i);
+		memory_region_init_alias(&s->mr_tcm_slv[i], OBJECT(s), name,
+						&s->mr_tcm[i], 0x0, tcm_size);
+		memory_region_add_subregion(sysmem, tcm0_base + i * tcm0_size,
+							&s->mr_tcm_slv[i]);
+		g_free(name);
+
+		name = g_strdup_printf("mcu%d_slv_1st_rsvd", i);
+		create_unimplemented_device(name, tcm0_base + tcm_size + i * tcm0_size, tcm_size);
+		g_free(name);
+
+		name = g_strdup_printf("mcu%d_slv_tcmB", i);
+		memory_region_init_alias(&s->mr_tcm_slv[i + 2], OBJECT(s), name,
+						&s->mr_tcm[i + 2], 0x0, tcm_size);
+		memory_region_add_subregion(sysmem, tcm0_base + tcm_size * 2 + tcm0_size * i,
+							&s->mr_tcm_slv[i+2]);
+		g_free(name);
+
+		name = g_strdup_printf("mcu%d_slv_2nd_rsvd", i);
+		create_unimplemented_device(name, tcm0_base + tcm_size * 3 + i * tcm0_size, tcm_size * 5);
+		g_free(name);
+	}
+}
+
+static void create_apu_split(LagunaSafety *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
 	hwaddr tcm_base = base_memmap[VIRT_TCM].base;
@@ -59,16 +125,21 @@ static void create_apu(LagunaSafety *s)
 		object_property_set_link(cpuobj, "memory", OBJECT(&s->mr_cpu[i]),
 									&error_abort);
 
-		name = g_strdup_printf("tcm%x", i);
+		name = g_strdup_printf("tcm%x_A", i);
 		memory_region_init_ram(&s->mr_tcm[i], OBJECT(s), name, tcm_size, &error_fatal);
 		memory_region_add_subregion(&s->mr_cpu[i], tcm_base, &s->mr_tcm[i]);
 		g_free(name);
 
-		name = g_strdup_printf("cpu%d-alias", i);
-		memory_region_init_alias(&s->mr_cpu_alias[i], OBJECT(s), name, sysmem, tcm_size, 0x100000000);
+		name = g_strdup_printf("tcm%x_B", i);
+		memory_region_init_ram(&s->mr_tcm[i + 2], OBJECT(s), name, tcm_size, &error_fatal);
+		memory_region_add_subregion(&s->mr_cpu[i], tcm_base + (tcm_size << 1), &s->mr_tcm[i + 2]);
 		g_free(name);
 
-		memory_region_add_subregion_overlap(&s->mr_cpu[i], tcm_size, &s->mr_cpu_alias[i], 0);
+		name = g_strdup_printf("cpu%d-alias", i);
+		memory_region_init_alias(&s->mr_cpu_alias[i], OBJECT(s), name, sysmem, tcm_size * 4, 0x800000000 - tcm_size * 4);
+		g_free(name);
+
+		memory_region_add_subregion_overlap(&s->mr_cpu[i], tcm_size * 4, &s->mr_cpu_alias[i], 0);
 
 		qdev_realize(DEVICE(cpuobj), NULL, &error_fatal);
 	}
@@ -82,6 +153,9 @@ static void create_gic(LagunaSafety *s)
 	DeviceState *gicdev;
 	int i;
 
+	if (s->cfg.lockstep)
+		nr_mpu >>= 1;
+
 	object_initialize_child(OBJECT(s), "mpu-gic", &s->mpu.gic, TYPE_ARM_GIC);
 	gicdev = DEVICE(&s->mpu.gic);
 	qdev_prop_set_uint32(gicdev, "revision", 2);
@@ -94,8 +168,8 @@ static void create_gic(LagunaSafety *s)
 
 	gicbusdev = SYS_BUS_DEVICE(gicdev);
 	sysbus_realize(gicbusdev, &error_fatal);
-	sysbus_mmio_map(gicbusdev, 0, base_memmap[VIRT_GIC_DIST].base);
-	sysbus_mmio_map(gicbusdev, 1, base_memmap[VIRT_GIC_CPU].base);
+	sysbus_mmio_map(gicbusdev, 0, base_memmap[VIRT_GIC1_DIST].base);
+	sysbus_mmio_map(gicbusdev, 1, base_memmap[VIRT_GIC1_CPU].base);
 
 	for (i = 0; i < nr_mpu; i++) {
 		DeviceState *cpudev = DEVICE(qemu_get_cpu(i));
@@ -190,7 +264,13 @@ static void lua_safety_realize(DeviceState *dev, Error **errp)
 {
 	LagunaSafety *s = LUA_SAFETY(dev);
 
-	create_apu(s);
+	if (s->cfg.lockstep) {
+		create_apu_lockstep(s);
+		create_tcm_slave_lockstep(s);
+	} else {
+		create_apu_split(s);
+		create_tcm_slave_split(s);
+	}
 	create_gic(s);
 	create_uart(s);
 	create_timer(s);
@@ -199,6 +279,7 @@ static void lua_safety_realize(DeviceState *dev, Error **errp)
 }
 
 static Property lua_safety_properties[] = {
+	DEFINE_PROP_BOOL("lockstep", LagunaSafety, cfg.lockstep, true),
 	DEFINE_PROP_END_OF_LIST()
 };
 

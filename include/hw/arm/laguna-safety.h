@@ -54,27 +54,40 @@ OBJECT_DECLARE_SIMPLE_TYPE(LagunaSafety, LUA_SAFETY)
 
 enum {
 	VIRT_TCM,
-	VIRT_BOOTROM,
+	VIRT_OCM,
+	VIRT_IRAM,
+	VIRT_CORE0_TCM_SLAVE,
+	VIRT_CORE1_TCM_SLAVE,
+	VIRT_GIC1_DIST,
+	VIRT_GIC1_CPU,
+	VIRT_GIC2_DIST,
+	VIRT_GIC2_CPU,
+	VIRT_QSPI,
 	VIRT_EMAC,
 	VIRT_UART,
 	VIRT_TIMER,
-	VIRT_OCM,
-	VIRT_IRAM,
-	VIRT_GIC_DIST,
-	VIRT_GIC_CPU,
+	VIRT_FLASH_EMMC,
+	VIRT_FLASH_OSPI,
+	VIRT_BOOTROM,
 };
 
 static const MemMapEntry base_memmap[] = {
 	[VIRT_TCM]               =    { 0x00000000, 0x00008000 },
-	[VIRT_BOOTROM]           =    { 0xFFFF0000, 0x00010000 },
-	[VIRT_EMAC]              =    { 0x00536000, 0x00004000 },
-	[VIRT_UART]              =    { 0x00602000, 0x00001000 },
-	[VIRT_TIMER]             =    { 0x00657000, 0x00001000 },
 	[VIRT_OCM]               =    { 0x00200000, 0x00200000 },
 	[VIRT_IRAM]              =    { 0x00400000, 0x00010000 },
-	/* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
-	[VIRT_GIC_DIST]          =    { 0x00501000, 0x00001000 },
-	[VIRT_GIC_CPU]           =    { 0x00502000, 0x00002000 },
+	[VIRT_CORE0_TCM_SLAVE]   =    { 0x00440000, 0x00040000 },
+	[VIRT_CORE1_TCM_SLAVE]   =    { 0x00480000, 0x00040000 },
+	[VIRT_GIC1_DIST]         =    { 0x00501000, 0x00001000 },
+	[VIRT_GIC1_CPU]          =    { 0x00502000, 0x00002000 },
+	[VIRT_GIC2_DIST]         =    { 0x00509000, 0x00001000 },
+	[VIRT_GIC2_CPU]          =    { 0x0050A000, 0x00002000 },
+	[VIRT_QSPI]              =    { 0x0051F000, 0x00001000 },
+	[VIRT_EMAC]              =    { 0x00534000, 0x00004000 },
+	[VIRT_UART]              =    { 0x00602000, 0x00001000 },
+	[VIRT_TIMER]             =    { 0x00657000, 0x00001000 },
+	[VIRT_FLASH_EMMC]        =    { 0x0C010000, 0x00002000 },
+	[VIRT_FLASH_OSPI]        =    { 0x0C040000, 0x00001000 },
+	[VIRT_BOOTROM]           =    { 0xFFFF0000, 0x00010000 },
 };
 
 static const int mpu_irqmap[] = {
@@ -100,8 +113,13 @@ struct LagunaSafety {
 
 	MemoryRegion mr_ocm;
 	MemoryRegion mr_iram;
-	MemoryRegion mr_tcm[LUA_SAFETY_NR_MCPUS];
+	MemoryRegion mr_tcm[LUA_SAFETY_NR_MCPUS * 2];
+	MemoryRegion mr_tcm_slv[LUA_SAFETY_NR_MCPUS * 2];
 	MemoryRegion mr_cpu[LUA_SAFETY_NR_MCPUS];
 	MemoryRegion mr_cpu_alias[LUA_SAFETY_NR_MCPUS];
+
+	struct {
+		bool lockstep;
+	} cfg;
 };
 #endif
