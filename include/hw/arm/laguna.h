@@ -174,7 +174,7 @@ struct LagunaSoC {
 		uint8_t bootmode;
 		bool virt;
 		bool secure;
-		char *flash_model;
+		char *nor_flash;
 		bool download;
 	} cfg;
 };

@@ -55,17 +55,17 @@ struct LagunaVirt {
 		bool has_emmc;
 		uint8_t part_config;
 		uint8_t bootmode;
-		const char *flash_model;
+		const char *nor_flash;
 		const char *nand;
 		bool download;
 	} cfg;
 };
 
-static void lmt_virt_set_flash_model(Object *obj, const char *str, Error **errp)
+static void lua_virt_set_nor_flash(Object *obj, const char *str, Error **errp)
 {
 	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
 
-	s->cfg.flash_model = g_strdup(str);
+	s->cfg.nor_flash = g_strdup(str);
 }
 
 static void lua_virt_set_emmc(Object *obj, bool value, Error **errp)
@@ -625,9 +625,9 @@ static void lua_virt_mach_init(MachineState *machine)
 		object_property_set_bool(OBJECT(&vms->lua), "secure",
 								vms->cfg.secure, &error_abort);
 
-	if(vms->cfg.flash_model)
-		object_property_set_str(OBJECT(&vms->lua), "flash-model",
-								vms->cfg.flash_model, &error_abort);
+	if(vms->cfg.nor_flash)
+		object_property_set_str(OBJECT(&vms->lua), "nor-flash",
+								vms->cfg.nor_flash, &error_abort);
 
 	if (vms->cfg.download)
 		object_property_set_bool(OBJECT(&vms->lua), "download",
@@ -663,7 +663,7 @@ static void lua_virt_mach_instance_init(Object *obj)
 	MachineState *ms = MACHINE(vms);
 
 	/* default spi nor flash model */
-	vms->cfg.flash_model = "n25q032a11";
+	vms->cfg.nor_flash = "n25q032a11";
 
 	/* default spi nand flash model */
 	vms->cfg.nand = "TC58CVG2S0HRAIG";
@@ -702,8 +702,8 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 	object_class_property_add(oc, "bootmode", "uint8",
 		NULL, lua_virt_set_bootmode,
 		NULL, NULL);
-	object_class_property_add_str(oc, "flash", NULL,
-					lmt_virt_set_flash_model);
+	object_class_property_add_str(oc, "nor", NULL,
+					lua_virt_set_nor_flash);
 	object_class_property_add_bool(oc, "download", NULL,
 					lua_virt_set_download);
 }

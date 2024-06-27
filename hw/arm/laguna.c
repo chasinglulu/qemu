@@ -235,7 +235,7 @@ static void create_uart(LagunaSoC *s)
 	}
 }
 
-static bool flash_model_valid(const char *model)
+static bool nor_flash_valid(const char *model)
 {
 	GSList *list, *elt;
 
@@ -257,21 +257,21 @@ static bool flash_model_valid(const char *model)
 
 static DeviceState* create_nor_flash(LagunaSoC *s, int unit)
 {
-	static DeviceState *flash_dev;
+	static DeviceState *nor_flash;
 	DriveInfo *dinfo = drive_get(IF_MTD, 0, unit);
 
-	if (!flash_model_valid(s->cfg.flash_model)) {
-		error_report("Flash model %s not supported", s->cfg.flash_model);
+	if (!nor_flash_valid(s->cfg.nor_flash)) {
+		error_report("Flash model %s not supported", s->cfg.nor_flash);
 		exit(1);
 	}
 
-	flash_dev = qdev_new(s->cfg.flash_model);
+	nor_flash = qdev_new(s->cfg.nor_flash);
 	if (dinfo) {
-		qdev_prop_set_drive_err(flash_dev, "drive",
+		qdev_prop_set_drive_err(nor_flash, "drive",
 						blk_by_legacy_dinfo(dinfo), &error_fatal);
 	}
 
-	return flash_dev;
+	return nor_flash;
 }
 
 static DeviceState* create_nand_flash(LagunaSoC *s, int unit)
@@ -561,7 +561,7 @@ static Property lua_soc_properties[] = {
 	DEFINE_PROP_BOOL("has-emmc", LagunaSoC, cfg.has_emmc, false),
 	DEFINE_PROP_UINT8("part-config", LagunaSoC, cfg.part_config, 0x0),
 	DEFINE_PROP_UINT8("bootmode", LagunaSoC, cfg.bootmode, 0x0),
-	DEFINE_PROP_STRING("flash-model", LagunaSoC, cfg.flash_model),
+	DEFINE_PROP_STRING("nor-flash", LagunaSoC, cfg.nor_flash),
 	DEFINE_PROP_BOOL("download", LagunaSoC, cfg.download, false),
 	DEFINE_PROP_END_OF_LIST()
 };
