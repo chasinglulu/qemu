@@ -32,6 +32,7 @@
 #include "target/arm/cpu.h"
 #include "hw/sd/sdhci.h"
 #include "hw/net/dwc_eth_qos.h"
+#include "hw/ssi/designware_spi.h"
 #include "hw/timer/cadence_ttc.h"
 
 #define TYPE_LUA_SAFETY "laguna-safety-island"
@@ -92,9 +93,10 @@ static const MemMapEntry base_memmap[] = {
 };
 
 static const int mpu_irqmap[] = {
-	[VIRT_UART] = 14,	/* ...to 14 + LUA_SAFETY_NR_APU_UARTS - 1 */
-	[VIRT_EMAC] = 112,
-	[VIRT_TIMER] = 20,
+	[VIRT_UART] = 10,	/* ...to 14 + LUA_SAFETY_NR_APU_UARTS - 1 */
+	[VIRT_EMAC] = 43,
+	[VIRT_TIMER] = 25,
+	[VIRT_QSPI] = 42,
 };
 
 struct LagunaSafety {
@@ -107,6 +109,8 @@ struct LagunaSafety {
 			DWUARTState uarts[LUA_SAFETY_NR_MPU_UARTS];
 			CadenceTTCState ttc[LUA_SAFETY_NR_TIMER];
 			DesignwareEtherQoSState eqos;
+			DWSPIState qspi;
+			DWSPIState ospi;
 		} peri;
 
 		ARMCPU cpus[LUA_SAFETY_NR_MCPUS];
@@ -122,6 +126,7 @@ struct LagunaSafety {
 
 	struct {
 		bool lockstep;
+		char *nor_flash;
 	} cfg;
 };
 #endif

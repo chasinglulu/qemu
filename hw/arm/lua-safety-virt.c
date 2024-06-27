@@ -50,6 +50,7 @@ struct LuaSafetyVirt {
 	struct arm_boot_info bootinfo;
 
 	struct {
+		const char *nor_flash;
 		bool lockstep;
 	} cfg;
 };
@@ -59,6 +60,13 @@ static void lua_virt_set_lockstep(Object *obj, bool value, Error **errp)
 	LuaSafetyVirt *s = LUA_SAFETY_VIRT_MACHINE(obj);
 
 	s->cfg.lockstep = value;
+}
+
+static void lua_virt_set_nor_flash(Object *obj, const char *str, Error **errp)
+{
+	LuaSafetyVirt *s = LUA_SAFETY_VIRT_MACHINE(obj);
+
+	s->cfg.nor_flash = str;
 }
 
 static void create_fdt(LuaSafetyVirt *s)
@@ -402,6 +410,10 @@ static void lua_virt_mach_init(MachineState *machine)
 		object_property_set_bool(OBJECT(&vms->safety), "lockstep",
 								vms->cfg.lockstep, &error_abort);
 
+	if(vms->cfg.nor_flash)
+		object_property_set_str(OBJECT(&vms->safety), "nor-flash",
+								vms->cfg.nor_flash, &error_abort);
+
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->safety), &error_fatal);
 
 	create_fdt(vms);
@@ -429,6 +441,9 @@ static void lua_virt_mach_instance_init(Object *obj)
 	LuaSafetyVirt *s = LUA_SAFETY_VIRT_MACHINE(obj);
 
 	s->cfg.lockstep = true;
+
+	/* default spi nor flash model */
+	s->cfg.nor_flash = "n25q032a11";
 }
 
 static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
@@ -448,6 +463,8 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 
 	object_class_property_add_bool(oc, "lockstep", NULL,
 					lua_virt_set_lockstep);
+	object_class_property_add_str(oc, "nor", NULL,
+					lua_virt_set_nor_flash);
 }
 
 static const TypeInfo lua_virt_mach_info = {

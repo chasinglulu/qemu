@@ -31,6 +31,7 @@
 #include "sysemu/reset.h"
 #include "sysemu/blockdev.h"
 #include "hw/arm/laguna-safety.h"
+#include "hw/ssi/ssi.h"
 
 static void create_tcm_slave_lockstep(LagunaSafety *s)
 {
@@ -268,6 +269,150 @@ static void create_ethernet(LagunaSafety *s)
 	sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
 }
 
+static bool nor_flash_valid(const char *model)
+{
+	GSList *list, *elt;
+
+	list = object_class_get_list_sorted(TYPE_DEVICE, false);
+
+	for (elt = list; elt; elt = elt->next) {
+		DeviceClass *dc = OBJECT_CLASS_CHECK(DeviceClass, elt->data, TYPE_DEVICE);
+		const char *name = object_class_get_name(OBJECT_CLASS(dc));
+
+		if (!dc->bus_type || strncmp("SSI", dc->bus_type, 3))
+			continue;
+
+		if (strcmp(name, model) == 0)
+			return true;
+	}
+
+	return false;
+}
+
+static DeviceState* create_nor_flash(LagunaSafety *s, int unit)
+{
+	static DeviceState *flash_dev;
+	DriveInfo *dinfo = drive_get(IF_MTD, 0, unit);
+
+	if (!nor_flash_valid(s->cfg.nor_flash)) {
+		error_report("Flash model %s not supported", s->cfg.nor_flash);
+		exit(1);
+	}
+
+	flash_dev = qdev_new(s->cfg.nor_flash);
+	if (dinfo) {
+		qdev_prop_set_drive_err(flash_dev, "drive",
+						blk_by_legacy_dinfo(dinfo), &error_fatal);
+	}
+
+	return flash_dev;
+}
+
+
+static void create_qspi_nor_flash(LagunaSafety *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	int irq = mpu_irqmap[VIRT_QSPI];
+	hwaddr base = base_memmap[VIRT_QSPI].base;
+	DeviceState *gicdev = DEVICE(&s->mpu.gic);
+	DeviceState *nor_dev;
+	BusState *spi_bus;
+	qemu_irq cs_line;
+	DeviceState *dev;
+	MemoryRegion *mr;
+	const int flash_num = 1;
+	char *name = g_strdup_printf("qspi");
+
+	object_initialize_child(OBJECT(s), name, &s->mpu.peri.qspi,
+							TYPE_DESIGNWARE_SPI);
+	dev = DEVICE(&s->mpu.peri.qspi);
+	qdev_prop_set_uint32(dev, "num-cs", flash_num);
+	qdev_prop_set_uint32(dev, "len-flash-dev", flash_num);
+	char *propname = g_strdup_printf("flash-dev[0]");
+	nor_dev = create_nor_flash(s, 0);
+	qdev_prop_set_uint64(dev, propname, (uint64_t)nor_dev);
+	g_free(propname);
+
+	sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+	mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+	memory_region_add_subregion(sysmem, base, mr);
+
+	sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+									qdev_get_gpio_in(gicdev, irq));
+
+	g_free(name);
+
+	/* nor flash memory */
+	spi_bus = BUS(s->mpu.peri.qspi.spi);
+	qdev_realize_and_unref(nor_dev, spi_bus, &error_fatal);
+	cs_line = qdev_get_gpio_in_named(nor_dev, SSI_GPIO_CS, 0);
+	sysbus_connect_irq(SYS_BUS_DEVICE(&s->mpu.peri.qspi), 1, cs_line);
+}
+
+static DeviceState* create_nand_flash(LagunaSafety *s, int unit)
+{
+	static DeviceState *nand;
+	DriveInfo *dinfo = drive_get(IF_MTD, 0, unit);
+
+	nand = qdev_new("TC58CVG2S0HRAIG");
+	if (dinfo) {
+		qdev_prop_set_drive_err(nand, "drive",
+						blk_by_legacy_dinfo(dinfo), &error_fatal);
+	}
+
+	return nand;
+}
+
+static void create_ospi_nor_nand_flash(LagunaSafety *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	hwaddr base = base_memmap[VIRT_FLASH_OSPI].base;
+	// hwaddr size = base_memmap[VIRT_FLASH_OSPI].size;
+	// DeviceState *gicdev = DEVICE(&s->mpu.gic);
+	DeviceState *nor_dev = NULL, *nand_dev = NULL;
+	BusState *spi_bus;
+	qemu_irq cs_line;
+	DeviceState *dev;
+	MemoryRegion *mr;
+	const int flash_num = 2;
+	int j;
+	char *name = g_strdup_printf("ospi0");
+
+	object_initialize_child(OBJECT(s), name, &s->mpu.peri.ospi,
+							TYPE_DESIGNWARE_SPI);
+	dev = DEVICE(&s->mpu.peri.ospi);
+	qdev_prop_set_uint32(dev, "num-cs", flash_num);
+	qdev_prop_set_uint32(dev, "len-flash-dev", flash_num);
+	for (j = 0; j < flash_num; j++) {
+		char *propname = g_strdup_printf("flash-dev[%d]", j);
+		if (j)
+			nand_dev = create_nand_flash(s, j + 1);
+		else
+			nor_dev = create_nor_flash(s, j + 1);
+		qdev_prop_set_uint64(dev, propname, (uint64_t)(j ? nand_dev : nor_dev));
+		g_free(propname);
+	}
+
+	sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+	mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+	memory_region_add_subregion(sysmem, base, mr);
+
+	spi_bus = BUS(s->mpu.peri.ospi.spi);
+	g_free(name);
+
+	/* nor flash memory */
+	qdev_realize_and_unref(nor_dev, spi_bus, &error_fatal);
+	cs_line = qdev_get_gpio_in_named(nor_dev, SSI_GPIO_CS, 0);
+	sysbus_connect_irq(SYS_BUS_DEVICE(&s->mpu.peri.ospi), 1, cs_line);
+
+	/* nand flash memory */
+	qdev_realize_and_unref(nand_dev, spi_bus, &error_fatal);
+	cs_line = qdev_get_gpio_in_named(nand_dev, SSI_GPIO_CS, 0);
+	sysbus_connect_irq(SYS_BUS_DEVICE(&s->mpu.peri.ospi), 2, cs_line);
+}
+
 static void create_memmap(LagunaSafety *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
@@ -298,12 +443,15 @@ static void lua_safety_realize(DeviceState *dev, Error **errp)
 	create_uart(s);
 	create_timer(s);
 	create_ethernet(s);
+	create_qspi_nor_flash(s);
+	create_ospi_nor_nand_flash(s);
 	create_memmap(s);
 	// create_unimp(s);
 }
 
 static Property lua_safety_properties[] = {
 	DEFINE_PROP_BOOL("lockstep", LagunaSafety, cfg.lockstep, true),
+	DEFINE_PROP_STRING("nor-flash", LagunaSafety, cfg.nor_flash),
 	DEFINE_PROP_END_OF_LIST()
 };
 
