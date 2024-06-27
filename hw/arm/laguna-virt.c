@@ -663,7 +663,7 @@ static void lua_virt_mach_instance_init(Object *obj)
 	MachineState *ms = MACHINE(vms);
 
 	/* default spi nor flash model */
-	vms->cfg.nor_flash = "n25q032a11";
+	vms->cfg.nor_flash = g_strdup("n25q032a11");
 
 	/* default spi nand flash model */
 	vms->cfg.nand = "TC58CVG2S0HRAIG";
@@ -708,12 +708,20 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 					lua_virt_set_download);
 }
 
+static void lua_virt_mach_finalize(Object *obj)
+{
+	LagunaVirt *vms = LAGUNA_VIRT_MACHINE(obj);
+
+	g_free((void *)vms->cfg.nor_flash);
+}
+
 static const TypeInfo lua_virt_mach_info = {
 	.name       = TYPE_LAGUNA_VIRT_MACHINE,
 	.parent     = TYPE_MACHINE,
 	.class_init = lua_virt_mach_class_init,
 	.instance_init = lua_virt_mach_instance_init,
 	.instance_size = sizeof(LagunaVirt),
+	.instance_finalize = lua_virt_mach_finalize,
 };
 
 static void lua_virt_machine_init(void)
