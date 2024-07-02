@@ -200,16 +200,38 @@ static void create_gpio(LagunaSoC *s)
 	}
 }
 
-static void create_uart(LagunaSoC *s)
+static void create_uart0(LagunaSoC *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
-	int irq = apu_irqmap[VIRT_UART];
-	hwaddr base = base_memmap[VIRT_UART].base;
-	hwaddr size = base_memmap[VIRT_UART].size;
+	hwaddr base = base_memmap[VIRT_SAFETY_UART0].base;
+	const char *name = "safety_uart0";
+	DeviceState *dev;
+	MemoryRegion *mr;
+
+	object_initialize_child(OBJECT(s), name, &s->apu.peri.uarts[0],
+							TYPE_DW_UART);
+	dev = DEVICE(&s->apu.peri.uarts[0]);
+	qdev_prop_set_uint8(dev, "regshift", 2);
+	qdev_prop_set_uint32(dev, "baudbase", 115200);
+	qdev_prop_set_uint8(dev, "endianness", DEVICE_LITTLE_ENDIAN);
+	qdev_prop_set_chr(dev, "chardev", serial_hd(5));
+	qdev_prop_set_uint8(dev, "index", 0);
+	sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+	mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+	memory_region_add_subregion(sysmem, base, mr);
+}
+
+static void create_uart4(LagunaSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	int irq = apu_irqmap[VIRT_UART4];
+	hwaddr base = base_memmap[VIRT_UART4].base;
+	hwaddr size = base_memmap[VIRT_UART4].size;
 	DeviceState *gicdev = DEVICE(&s->apu.gic);
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(s->apu.peri.uarts); i++) {
+	for (i = 4; i < 6; i++) {
 		char *name = g_strdup_printf("uart%d", i);
 		DeviceState *dev;
 		MemoryRegion *mr;
@@ -220,7 +242,7 @@ static void create_uart(LagunaSoC *s)
 		qdev_prop_set_uint8(dev, "regshift", 2);
 		qdev_prop_set_uint32(dev, "baudbase", 115200);
 		qdev_prop_set_uint8(dev, "endianness", DEVICE_LITTLE_ENDIAN);
-		qdev_prop_set_chr(dev, "chardev", serial_hd(i));
+		qdev_prop_set_chr(dev, "chardev", serial_hd(i - 1));
 		qdev_prop_set_uint8(dev, "index", i);
 		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
@@ -233,6 +255,48 @@ static void create_uart(LagunaSoC *s)
 		irq += 1;
 		g_free(name);
 	}
+}
+
+static void create_uart1(LagunaSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	int irq = apu_irqmap[VIRT_UART1];
+	hwaddr base = base_memmap[VIRT_UART1].base;
+	hwaddr size = base_memmap[VIRT_UART1].size;
+	DeviceState *gicdev = DEVICE(&s->apu.gic);
+	int i;
+
+	for (i = 1; i < 4; i++) {
+		char *name = g_strdup_printf("uart%d", i);
+		DeviceState *dev;
+		MemoryRegion *mr;
+
+		object_initialize_child(OBJECT(s), name, &s->apu.peri.uarts[i],
+								TYPE_DW_UART);
+		dev = DEVICE(&s->apu.peri.uarts[i]);
+		qdev_prop_set_uint8(dev, "regshift", 2);
+		qdev_prop_set_uint32(dev, "baudbase", 115200);
+		qdev_prop_set_uint8(dev, "endianness", DEVICE_LITTLE_ENDIAN);
+		qdev_prop_set_chr(dev, "chardev", serial_hd(i - 1));
+		qdev_prop_set_uint8(dev, "index", i);
+		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+		mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+		memory_region_add_subregion(sysmem, base, mr);
+
+		sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+
+		base += size;
+		irq += 1;
+		g_free(name);
+	}
+}
+
+static void create_uart(LagunaSoC *s)
+{
+	create_uart0(s);
+	create_uart1(s);
+	create_uart4(s);
 }
 
 static bool nor_flash_valid(const char *model)
@@ -291,9 +355,9 @@ static DeviceState* create_nand_flash(LagunaSoC *s, int unit)
 static void create_spi_nor_flash(LagunaSoC *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
-	int irq = apu_irqmap[VIRT_SPI];
-	hwaddr base = base_memmap[VIRT_SPI].base;
-	hwaddr size = base_memmap[VIRT_SPI].size;
+	int irq = apu_irqmap[VIRT_OSPI];
+	hwaddr base = base_memmap[VIRT_OSPI].base;
+	hwaddr size = base_memmap[VIRT_OSPI].size;
 	DeviceState *gicdev = DEVICE(&s->apu.gic);
 	DeviceState *nor_dev, *nand_dev;
 	BusState *spi_bus;
@@ -301,14 +365,14 @@ static void create_spi_nor_flash(LagunaSoC *s)
 	const int flash_num = 2;
 	int i, j;
 
-	for (i = 0; i < ARRAY_SIZE(s->apu.peri.spi); i++) {
-		char *name = g_strdup_printf("spi%d", i);
+	for (i = 0; i < ARRAY_SIZE(s->apu.peri.ospi); i++) {
+		char *name = g_strdup_printf("ospi%d", i);
 		DeviceState *dev;
 		MemoryRegion *mr;
 
-		object_initialize_child(OBJECT(s), name, &s->apu.peri.spi[i],
+		object_initialize_child(OBJECT(s), name, &s->apu.peri.ospi[i],
 								TYPE_DESIGNWARE_SPI);
-		dev = DEVICE(&s->apu.peri.spi[i]);
+		dev = DEVICE(&s->apu.peri.ospi[i]);
 		qdev_prop_set_uint32(dev, "num-cs", flash_num);
 		qdev_prop_set_uint32(dev, "len-flash-dev", flash_num);
 		for (j = 0; j < flash_num; j++) {
@@ -328,7 +392,7 @@ static void create_spi_nor_flash(LagunaSoC *s)
 
 		sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
 		                                qdev_get_gpio_in(gicdev, irq));
-		spi_bus = BUS(s->apu.peri.spi[i].spi);
+		spi_bus = BUS(s->apu.peri.ospi[i].spi);
 		base += size;
 		irq += 1;
 		g_free(name);
@@ -336,12 +400,12 @@ static void create_spi_nor_flash(LagunaSoC *s)
 		/* nor flash memory */
 		qdev_realize_and_unref(nor_dev, spi_bus, &error_fatal);
 		cs_line = qdev_get_gpio_in_named(nor_dev, SSI_GPIO_CS, 0);
-		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.spi[i]), 1, cs_line);
+		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.ospi[i]), 1, cs_line);
 
 		/* nand flash memory */
 		qdev_realize_and_unref(nand_dev, spi_bus, &error_fatal);
 		cs_line = qdev_get_gpio_in_named(nand_dev, SSI_GPIO_CS, 0);
-		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.spi[i]), 2, cs_line);
+		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.ospi[i]), 2, cs_line);
 	}
 }
 

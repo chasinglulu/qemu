@@ -426,12 +426,13 @@ static void fdt_add_sdhci_nodes(const LagunaVirt *vms)
 static void fdt_add_aliases_nodes(LagunaVirt *vms)
 {
 	int i;
-	hwaddr base = base_memmap[VIRT_UART].base;
-	hwaddr size = base_memmap[VIRT_UART].size;
+	hwaddr base = base_memmap[VIRT_UART1].base;
+	hwaddr size = base_memmap[VIRT_UART1].size;
+	uint32_t nr_uart = ARRAY_SIZE(vms->lua.apu.peri.uarts) / 2;
 	qemu_fdt_add_subnode(vms->fdt, "/aliases");
 	char *nodename, *propname;
 
-	for (i = 0; i < ARRAY_SIZE(vms->lua.apu.peri.uarts); i++) {
+	for (i = 1; i <= nr_uart; i++) {
 		nodename = g_strdup_printf("/serial@%" PRIx64, base);
 		propname = g_strdup_printf("serial%d", i);
 		qemu_fdt_setprop_string(vms->fdt, "/aliases", propname, nodename);
@@ -446,10 +447,10 @@ static void fdt_add_aliases_nodes(LagunaVirt *vms)
 static void fdt_add_uart_nodes(const LagunaVirt *vms)
 {
 	char *nodename;
-	uint32_t nr_uart = ARRAY_SIZE(vms->lua.apu.peri.uarts);
-	hwaddr base = base_memmap[VIRT_UART].base;
-	hwaddr size = base_memmap[VIRT_UART].size;
-	int irq = apu_irqmap[VIRT_UART];
+	uint32_t nr_uart = ARRAY_SIZE(vms->lua.apu.peri.uarts) / 2;
+	hwaddr base = base_memmap[VIRT_UART1].base;
+	hwaddr size = base_memmap[VIRT_UART1].size;
+	int irq = apu_irqmap[VIRT_UART1];
 	const char compat[] = "ns16550";
 	const char clocknames[] = "apb_pclk";
 	int i;
@@ -457,7 +458,7 @@ static void fdt_add_uart_nodes(const LagunaVirt *vms)
 	/* Create nodes in incremental address */
 	base = base + size * (nr_uart - 1);
 	irq = irq + nr_uart - 1;
-	for (i = nr_uart - 1; i >= 0; i--) {
+	for (i = nr_uart; i > 0; i--) {
 		nodename = g_strdup_printf("/soc/serial@%" PRIx64, base);
 		qemu_fdt_add_subnode(vms->fdt, nodename);
 		/* Note that we can't use setprop_string because of the embedded NUL */
@@ -480,7 +481,7 @@ static void fdt_add_uart_nodes(const LagunaVirt *vms)
 		qemu_fdt_setprop(vms->fdt, nodename, "u-boot,dm-spl", NULL, 0);
 		base -= size;
 		irq -= 1;
-		if (i == 0) {
+		if (i == 1) {
 			/* Select UART0 as console  */
 			qemu_fdt_setprop_string(vms->fdt, "/chosen", "stdout-path", nodename);
 		}
