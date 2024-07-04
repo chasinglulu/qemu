@@ -34,6 +34,7 @@
 #include "hw/net/dwc_eth_qos.h"
 #include "hw/ssi/designware_spi.h"
 #include "hw/timer/cadence_ttc.h"
+#include "hw/sd/sdhci.h"
 
 #define TYPE_LUA_SAFETY "laguna-safety-island"
 OBJECT_DECLARE_SIMPLE_TYPE(LagunaSafety, LUA_SAFETY)
@@ -108,6 +109,7 @@ struct LagunaSafety {
 		struct {
 			DWUARTState uarts[LUA_SAFETY_NR_MPU_UARTS];
 			CadenceTTCState ttc[LUA_SAFETY_NR_TIMER];
+			SDHCIState mmc[LUA_SAFETY_NR_SDHCI];
 			DesignwareEtherQoSState eqos;
 			DWSPIState qspi;
 			DWSPIState ospi;

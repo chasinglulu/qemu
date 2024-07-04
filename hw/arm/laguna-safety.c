@@ -413,6 +413,66 @@ static void create_ospi_nor_nand_flash(LagunaSafety *s)
 	sysbus_connect_irq(SYS_BUS_DEVICE(&s->mpu.peri.ospi), 2, cs_line);
 }
 
+static void create_emmc(LagunaSafety *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	// int irq = apu_irqmap[VIRT_FLASH_EMMC];
+	hwaddr base = base_memmap[VIRT_FLASH_EMMC].base;
+	hwaddr size = base_memmap[VIRT_FLASH_EMMC].size;
+	// DeviceState *gicdev = DEVICE(&s->apu.gic);
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(s->mpu.peri.mmc); i++) {
+		char *name = g_strdup_printf("sdhci%d", i);
+		DeviceState *dev;
+		MemoryRegion *mr;
+
+		object_initialize_child(OBJECT(s), name, &s->mpu.peri.mmc[i],
+								TYPE_SYSBUS_SDHCI);
+		dev = DEVICE(&s->mpu.peri.mmc[i]);
+		object_property_set_uint(OBJECT(dev), "sd-spec-version", 3, &error_fatal);
+		object_property_set_uint(OBJECT(dev), "capareg", 0x70156ecc02UL, &error_fatal);
+		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+		mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+		memory_region_add_subregion(sysmem, base, mr);
+
+		// sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+
+		base += size;
+		// irq += 1;
+		g_free(name);
+	}
+}
+
+static void create_emmc_card(LagunaSafety *s, SDHCIState *mmc, int index)
+{
+	DriveInfo *di = drive_get(IF_EMMC, 0, index);
+	BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+	DeviceState *emmc;
+
+	emmc = qdev_new(TYPE_EMMC);
+	emmc->id = g_strdup_printf("emmc%d", index);
+	object_property_add_child(OBJECT(mmc), "emmc[*]", OBJECT(emmc));
+	object_property_set_uint(OBJECT(emmc), "spec_version", 3, &error_fatal);
+	object_property_set_uint(OBJECT(emmc), "boot-config", 0x0, &error_fatal);
+	qdev_prop_set_drive_err(emmc, "drive", blk, &error_fatal);
+	qdev_realize_and_unref(emmc, BUS(&mmc->sdbus), &error_fatal);
+}
+
+static void create_sd_card(SDHCIState *sd, int index)
+{
+	DriveInfo *di = drive_get(IF_SD, 0, index);
+	BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+	DeviceState *card;
+
+	card = qdev_new(TYPE_SD_CARD);
+	card->id = g_strdup_printf("sd%d", index);
+	object_property_add_child(OBJECT(sd), "card[*]", OBJECT(card));
+	qdev_prop_set_drive_err(card, "drive", blk, &error_fatal);
+	qdev_realize_and_unref(card, BUS(&sd->sdbus), &error_fatal);
+}
+
 static void create_memmap(LagunaSafety *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
@@ -431,6 +491,7 @@ static void create_memmap(LagunaSafety *s)
 static void lua_safety_realize(DeviceState *dev, Error **errp)
 {
 	LagunaSafety *s = LUA_SAFETY(dev);
+	int i;
 
 	if (s->cfg.lockstep) {
 		create_apu_lockstep(s);
@@ -445,8 +506,17 @@ static void lua_safety_realize(DeviceState *dev, Error **errp)
 	create_ethernet(s);
 	create_qspi_nor_flash(s);
 	create_ospi_nor_nand_flash(s);
+	create_emmc(s);
 	create_memmap(s);
 	// create_unimp(s);
+
+	for (i = 0; i < ARRAY_SIZE(s->mpu.peri.mmc); i++) {
+		if (i == 0) {
+			create_emmc_card(s, &s->mpu.peri.mmc[i], i);
+			continue;
+		}
+		create_sd_card(&s->mpu.peri.mmc[i], i);
+	}
 }
 
 static Property lua_safety_properties[] = {
