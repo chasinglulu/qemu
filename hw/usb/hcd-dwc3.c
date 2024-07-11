@@ -601,6 +601,8 @@ static void reset_csr(USBDWC3 * s)
             break;
         case R_GHWPARAMS8:
             break;
+        case R_DEPCMD0...R_DEPCMD7:
+            break;
         default:
             register_reset(&s->regs_info[i]);
             break;
@@ -687,7 +689,13 @@ static void usb_dwc3_depcmd_postw(RegisterInfo *reg, uint64_t val64)
 {
     USBDWC3 *s = USB_DWC3(reg->opaque);
     const RegisterAccessInfo *ac = reg->access;
-    uint32_t ep = 0;
+    struct dwc3_ep_config *epc;
+    union dwc3_event event;
+    static char data[256];
+    static int len = 0;
+    struct usb_raw_control_io io;
+    uint32_t cmd_param;
+    int ep = -1;
 
     switch (ac->addr) {
     case A_DEPCMD0:
@@ -715,12 +723,43 @@ static void usb_dwc3_depcmd_postw(RegisterInfo *reg, uint64_t val64)
         ep = 7;
         break;
     }
-    gadget->epnum = ep;
+    g_assert(ep < DWC_USB3_NUM_EPS && ep >= 0);
+    //qemu_log("%s: current ep = %d\n", __func__, ep);
 
 	/* Device Endpoint CMDTYP field */
 	switch (dwc3_device_get_ep_cmd(&s->dwc3_dev, ep)) {
 	case DWC3_DEPCMD_SETEPCONFIG:
 		qemu_log("Set Endpoint Configuration command\n");
+		uint32_t param0, param1, param2;
+		param0 = s->regs[DWC3_DEPCMDPAR0(ep)];
+		param1 = s->regs[DWC3_DEPCMDPAR1(ep)];
+		param2 = s->regs[DWC3_DEPCMDPAR2(ep)];
+		epc = &gadget->eps[ep];
+
+		if (param0 & DWC3_DEPCFG_ACTION_RESTORE)
+			epc->saved_state = param2;
+		epc->intr_num = param1 & 0x1F;
+		epc->depevten = (param1 >> 8) & 0x3F;
+		epc->usb_ep_num = (param1 >> 25) & 0x1F;
+		epc->brst_sz = (param0 >> 22) & 0xF;
+		epc->fifo_num = (param0 >> 17) & 0x1F;
+		epc->max_packet_size = (param0 >> 3) & 0x7FF;
+		epc->ep_type = (param0 >> 1) & 0x3;
+		qemu_log("epc[%d]->intr_num: 0x%x\n", ep, epc->intr_num);
+		qemu_log("epc[%d]->depevten: 0x%x\n", ep, epc->depevten);
+		qemu_log("epc[%d]->usb_ep_num: 0x%x\n", ep, epc->usb_ep_num);
+		qemu_log("epc[%d]->brst_sz: 0x%x\n", ep, epc->brst_sz);
+		qemu_log("epc[%d]->fifo_num: 0x%x\n", ep, epc->fifo_num);
+		qemu_log("epc[%d]->max_packet_size: 0x%x\n", ep, epc->max_packet_size);
+		qemu_log("epc[%d]->ep_type: 0x%x\n", ep, epc->ep_type);
+		if (ep > 1 && epc->ep_type == 0x2) {
+			if (epc->usb_ep_num & 0x1)
+				qemu_thread_create(&gadget->ep_bulk_in_thread, "ep-bulkin-loop", ep_bulk_in_loop,
+						gadget, QEMU_THREAD_JOINABLE);
+			else
+				qemu_thread_create(&gadget->ep_bulk_out_thread, "ep-bulkout-loop", ep_bulk_out_loop,
+						gadget, QEMU_THREAD_JOINABLE);
+		}
 		break;
 	case DWC3_DEPCMD_SETTRANSFRESOURCE:
 		qemu_log("Set Endpoint Transfer Resource Configuration command\n");
@@ -736,34 +775,128 @@ static void usb_dwc3_depcmd_postw(RegisterInfo *reg, uint64_t val64)
 		break;
 	case DWC3_DEPCMD_STARTTRANSFER:
 		qemu_log("Start Transfer command\n");
-		gadget->ep0_trb_addr = s->regs[DWC3_DEPCMDPAR0(ep)];
-		gadget->ep0_trb_addr <<= 32;
-		gadget->ep0_trb_addr |= s->regs[DWC3_DEPCMDPAR1(ep)];
-		qemu_log("%s: ep0_trb_addr: 0x%lx\n", __func__, gadget->ep0_trb_addr);
-		dma_memory_read(gadget->as, gadget->ep0_trb_addr, &gadget->trb, sizeof(gadget->trb), MEMTXATTRS_UNSPECIFIED);
-		qemu_log("trb ctrl: 0x%x\n", gadget->trb.ctrl);
-		qemu_log("trb size: 0x%x\n", gadget->trb.size);
+		dwc3_device_prefetch_trb(gadget, ep);
 
 		switch (gadget->trb.ctrl & (0x3F << 4)) {
 		case DWC3_TRBCTL_CONTROL_SETUP:
-			gadget->ctrl_req_addr = gadget->trb.bph;
-			gadget->ctrl_req_addr <<= 32;
-			gadget->ctrl_req_addr |= gadget->trb.bpl;
-			qemu_log("%s: ctrl_req_addr: 0x%lx\n", __func__, gadget->ctrl_req_addr);
+			/* Start usb raw ep0 loop first */
+			qemu_mutex_lock(&gadget->mutex);
+			qemu_cond_signal(&gadget->rg_thread_cond);
+			qemu_mutex_unlock(&gadget->mutex);
 			break;
 		case DWC3_TRBCTL_CONTROL_DATA:
-			gadget->data_addr = gadget->trb.bph;
-			gadget->data_addr <<= 32;
-			gadget->data_addr |= gadget->trb.bpl;
-			qemu_log("%s: data_addr: 0x%lx\n", __func__, gadget->data_addr);
+			epc = &gadget->eps[ep];
+			len = dwc3_device_fetch_ctrl_data(gadget, data, gadget->trb.size);
+			event.raw = dwc3_device_raise_ep0_control(ep, DWC3_DEPEVT_XFERCOMPLETE, DEPEVT_STATUS_CONTROL_DATA);
+			dwc3_device_trigger_event(gadget, epc->intr_num, &event);
+
+			if (gadget->trb.size < epc->max_packet_size) {
+				event.raw = dwc3_device_raise_ep0_control(ep ? 0 : 1, DWC3_DEPEVT_XFERNOTREADY, DEPEVT_STATUS_CONTROL_STATUS);
+				dwc3_device_trigger_event(gadget, epc->intr_num, &event);
+			}
+
+			break;
+		case DWC3_TRBCTL_CONTROL_STATUS3:
+			epc = &gadget->eps[ep];
+			char ctrlreq[256];
+
+			if (len) {
+				io.inner.ep = 0;
+				io.inner.flags = 0;
+				io.inner.length = 0;
+				memcpy(io.data, data, len);
+				io.inner.length = len;
+
+				if (gadget->is_dt_conf)
+					usb_parse_config((void *)io.data, 0);
+
+				int rv = usb_raw_ep0_write(gadget->raw_gadget_fd, (struct usb_raw_ep_io *)&io);
+				qemu_log("ep0: transferred %d bytes (in)\n", rv);
+			}
+
+			dwc3_device_fetch_ctrl_req(gadget, ctrlreq);
+			event.raw = dwc3_device_raise_ep0_control(ep, DWC3_DEPEVT_XFERCOMPLETE, 0);
+			dwc3_device_trigger_event(gadget, epc->intr_num, &event);
+			qemu_mutex_lock(&gadget->mutex);
+			qemu_cond_signal(&gadget->rg_event_notifier);
+			qemu_mutex_unlock(&gadget->mutex);
+			break;
+		case DWC3_TRBCTL_CONTROL_STATUS2:
+			io.inner.ep = 0;
+			io.inner.flags = 0;
+			io.inner.length = 0;
+			if (!gadget->is_setaddr_ctrlreq) {
+				int rv = usb_raw_ep0_read(gadget->raw_gadget_fd, (struct usb_raw_ep_io *)&io);
+				qemu_log("ep0: transferred %d bytes (out)\n", rv);
+			}
+
+			epc = &gadget->eps[ep];
+			event.raw = dwc3_device_raise_ep0_control(ep, DWC3_DEPEVT_XFERCOMPLETE, 0);
+			dwc3_device_trigger_event(gadget, epc->intr_num, &event);
+			qemu_log("%s: DWC3_TRBCTL_CONTROL_STATUS2\n", __func__);
+
+			/* Notify fake usb ctrlrequest completion */
+			if (gadget->is_setaddr_ctrlreq) {
+				qemu_mutex_lock(&gadget->mutex);
+				qemu_cond_signal(&gadget->rg_setaddr_cond);
+				qemu_mutex_unlock(&gadget->mutex);
+				gadget->is_setaddr_ctrlreq = false;
+				gadget->is_configured = true;
+			}
+			qemu_mutex_lock(&gadget->mutex);
+			qemu_cond_signal(&gadget->rg_event_notifier);
+			qemu_mutex_unlock(&gadget->mutex);
+
+			if (gadget->is_reset && gadget->is_set_config) {
+				qemu_mutex_lock(&gadget->mutex);
+				qemu_cond_signal(&gadget->rg_bulk_out_cond);
+				qemu_mutex_unlock(&gadget->mutex);
+				gadget->is_reset = false;
+			}
+			break;
+		case DWC3_TRBCTL_NORMAL:
+			if (ep & 0x1) {
+				qemu_log("bulk-in TRB\n");
+				len = dwc3_device_fetch_bulkin_data(gadget, data);
+				qemu_log("%s: bulk-in data len: %d\n", __func__, len);
+				usb_raw_memcpy_bulk_in_data(data, len);
+
+				gadget->trb.ctrl &= ~BIT(0);
+				gadget->trb.size -= len;
+				dwc3_device_update_trb(gadget, ep);
+
+				epc = &gadget->eps[ep];
+				event.raw = dwc3_device_raise_ep0_control(ep, DWC3_DEPEVT_XFERCOMPLETE, 0);
+				dwc3_device_trigger_event(gadget, epc->intr_num, &event);
+
+				if (len == 13) {
+					qemu_mutex_lock(&gadget->mutex);
+					qemu_cond_signal(&gadget->rg_bulk_out_cond);
+					qemu_mutex_unlock(&gadget->mutex);
+				}
+			} else {
+				qemu_log("bulk-out TRB\n");
+				len = usb_raw_memcpy_bulk_out_data(data);
+				dwc3_device_take_bulkout_data(gadget, data, len);
+
+				gadget->trb.ctrl &= ~BIT(0);
+				gadget->trb.size -= len;
+				dwc3_device_update_trb(gadget, ep);
+
+				epc = &gadget->eps[ep];
+				event.raw = dwc3_device_raise_ep0_control(ep, DWC3_DEPEVT_XFERCOMPLETE, 0);
+				dwc3_device_trigger_event(gadget, epc->intr_num, &event);
+
+				qemu_mutex_lock(&gadget->mutex);
+				qemu_cond_signal(&gadget->rg_bulk_in_cond);
+				qemu_mutex_unlock(&gadget->mutex);
+			}
+			qemu_log("%s: DWC3_TRBCTL_NORMAL\n", __func__);
 			break;
 		default:
 			qemu_log("Unknown ctrl request\n");
 		}
 
-		qemu_mutex_lock(&gadget->mutex);
-		qemu_cond_signal(&gadget->rg_thread_cond);
-		qemu_mutex_unlock(&gadget->mutex);
 		break;
 	case DWC3_DEPCMD_UPDATETRANSFER:
 		qemu_log("Update Transfer command\n");
@@ -773,6 +906,9 @@ static void usb_dwc3_depcmd_postw(RegisterInfo *reg, uint64_t val64)
 		break;
 	case DWC3_DEPCMD_DEPSTARTCFG:
 		qemu_log("Start New Configuration command\n");
+		cmd_param = extract32(s->regs[DWC3_DEPCMD(ep)], 16, 16);
+		if (cmd_param)
+			break;
 		gadget->raw_gadget_fd = usb_raw_open();
 		qemu_thread_create(&gadget->ep0_loop_thread, "ep0-loop", usb_ep0_loop_thread,
 						gadget, QEMU_THREAD_JOINABLE);
@@ -783,112 +919,201 @@ static void usb_dwc3_depcmd_postw(RegisterInfo *reg, uint64_t val64)
 		qemu_log_mask(LOG_GUEST_ERROR, "Invaild endpoint specific command\n");
 		return;
 	}
-    qemu_log("%s: epnum = %d\n", __func__, ep);
 
     clear_bit(DWC3_DEPCMD_CMDACT_OFFSET,
                 (uint64_t*)&s->regs[DWC3_DEPCMD(ep)]);
 }
 
-static uint64_t dwc3_gadget_gevntcount_prewrite(RegisterInfo *reg, uint64_t val)
+static uint64_t dwc3_gadget_gevntcount_prewr(RegisterInfo *reg, uint64_t val)
 {
     USBDWC3 *s = USB_DWC3(reg->opaque);
     const RegisterAccessInfo *ac = reg->access;
-    uint32_t epnum = 0;
+    struct dwc3_event_buffer *ev_buf;
+    int intr_num = -1;
 
     switch (ac->addr) {
     case A_GEVNTCOUNT_0:
-        epnum = 0;
+        intr_num = 0;
         break;
     case A_GEVNTCOUNT_1:
-        epnum = 1;
+        intr_num = 1;
         break;
     case A_GEVNTCOUNT_2:
-        epnum = 2;
+        intr_num = 2;
         break;
     case A_GEVNTCOUNT_3:
-        epnum = 3;
+        intr_num = 3;
         break;
     case A_GEVNTCOUNT_4:
-        epnum = 4;
+        intr_num = 4;
         break;
     case A_GEVNTCOUNT_5:
-        epnum = 5;
+        intr_num = 5;
         break;
     }
+    g_assert(intr_num < DWC_USB3_DEVICE_NUM_INT && intr_num >= 0);
 
-    s->regs[DWC3_GEVNTCOUNT(epnum)] -= val;
+    ev_buf = &s->dwc3_dev.ev_buffs[intr_num];
+    if (!(ev_buf->flags & DWC3_EVENT_BUFF_ENABLED) && !val) {
+        ev_buf->flags |= DWC3_EVENT_BUFF_ENABLED;
+    }
+    s->regs[DWC3_GEVNTCOUNT(intr_num)] -= val;
+    ev_buf->count -= val;
 
-    return s->regs[DWC3_GEVNTCOUNT(epnum)];
+    return s->regs[DWC3_GEVNTCOUNT(intr_num)];
 }
 
-static uint64_t dwc3_gadget_gevntcount_read(RegisterInfo *reg, uint64_t val)
+static uint64_t dwc3_gadget_gevntcount_postrd(RegisterInfo *reg, uint64_t val)
 {
-    USBDWC3 *s = USB_DWC3(reg->opaque);
+    // USBDWC3 *s = USB_DWC3(reg->opaque);
     const RegisterAccessInfo *ac = reg->access;
-    uint32_t epnum = 0;
+    int intr_num = -1;
 
     switch (ac->addr) {
     case A_GEVNTCOUNT_0:
-        epnum = 0;
+        intr_num = 0;
         break;
     case A_GEVNTCOUNT_1:
-        epnum = 1;
+        intr_num = 1;
         break;
     case A_GEVNTCOUNT_2:
-        epnum = 2;
+        intr_num = 2;
         break;
     case A_GEVNTCOUNT_3:
-        epnum = 3;
+        intr_num = 3;
         break;
     case A_GEVNTCOUNT_4:
-        epnum = 4;
+        intr_num = 4;
         break;
     case A_GEVNTCOUNT_5:
-        epnum = 5;
+        intr_num = 5;
         break;
     }
+    g_assert(intr_num < DWC_USB3_DEVICE_NUM_INT && intr_num >= 0);
 
-    if ((s->regs[DWC3_GEVNTCOUNT(epnum)] & 0xFFFC) > 0) {
-        qemu_mutex_lock(&gadget->mutex);
-        qemu_cond_signal(&gadget->rg_event_notifier);
-        qemu_mutex_unlock(&gadget->mutex);
-    }
+    // if ((s->regs[DWC3_GEVNTCOUNT(intr_num)] & 0xFFFC) > 0) {
+    //     qemu_mutex_lock(&gadget->mutex);
+    //     qemu_cond_signal(&gadget->rg_event_notifier);
+    //     qemu_mutex_unlock(&gadget->mutex);
+    // }
 
     return val;
 }
 
-static void dwc3_gadget_gevntsize_postwrite(RegisterInfo *reg, uint64_t val64)
+static void dwc3_gadget_gevntaddrlo_postwr(RegisterInfo *reg, uint64_t val64)
 {
     USBDWC3 *s = USB_DWC3(reg->opaque);
     const RegisterAccessInfo *ac = reg->access;
-    uint32_t epnum = 0;
+    struct dwc3_event_buffer *ev_buf;
+    int intr_num = -1;
+
+    switch (ac->addr) {
+    case A_GEVNTADRLO_0:
+        intr_num = 0;
+        break;
+    case A_GEVNTADRLO_1:
+        intr_num = 1;
+        break;
+    case A_GEVNTADRLO_2:
+        intr_num = 2;
+        break;
+    case A_GEVNTADRLO_3:
+        intr_num = 3;
+        break;
+    case A_GEVNTADRLO_4:
+        intr_num = 4;
+        break;
+    case A_GEVNTADRLO_5:
+        intr_num = 5;
+        break;
+    }
+    g_assert(intr_num < DWC_USB3_DEVICE_NUM_INT && intr_num >= 0);
+
+    ev_buf = &s->dwc3_dev.ev_buffs[intr_num];
+    ev_buf->dma |= val64;
+}
+
+static void dwc3_gadget_gevntaddrhi_postwr(RegisterInfo *reg, uint64_t val64)
+{
+    USBDWC3 *s = USB_DWC3(reg->opaque);
+    const RegisterAccessInfo *ac = reg->access;
+    struct dwc3_event_buffer *ev_buf;
+    int intr_num = -1;
+
+    switch (ac->addr) {
+    case A_GEVNTADRHI_0:
+        intr_num = 0;
+        break;
+    case A_GEVNTADRHI_1:
+        intr_num = 1;
+        break;
+    case A_GEVNTADRHI_2:
+        intr_num = 2;
+        break;
+    case A_GEVNTADRHI_3:
+        intr_num = 3;
+        break;
+    case A_GEVNTADRHI_4:
+        intr_num = 4;
+        break;
+    case A_GEVNTADRHI_5:
+        intr_num = 5;
+        break;
+    }
+    g_assert(intr_num < DWC_USB3_DEVICE_NUM_INT && intr_num >= 0);
+
+    ev_buf = &s->dwc3_dev.ev_buffs[intr_num];
+    ev_buf->dma |= val64 << 32;
+}
+
+static void dwc3_gadget_gevntsize_postwr(RegisterInfo *reg, uint64_t val64)
+{
+    USBDWC3 *s = USB_DWC3(reg->opaque);
+    const RegisterAccessInfo *ac = reg->access;
+    struct dwc3_event_buffer *ev_buf;
+    int intr_num = -1;
 
     switch (ac->addr) {
     case A_GEVNTSIZ_0:
-        epnum = 0;
+        intr_num = 0;
         break;
     case A_GEVNTSIZ_1:
-        epnum = 1;
+        intr_num = 1;
         break;
     case A_GEVNTSIZ_2:
-        epnum = 2;
+        intr_num = 2;
         break;
     case A_GEVNTSIZ_3:
-        epnum = 3;
+        intr_num = 3;
         break;
     case A_GEVNTSIZ_4:
-        epnum = 4;
+        intr_num = 4;
         break;
     case A_GEVNTSIZ_5:
-        epnum = 5;
+        intr_num = 5;
         break;
     }
-
-    if (!(s->regs[DWC3_GEVNTSIZ(epnum)] & BIT(31)) && gadget->raw_gadget_fd > 0) {
-        qemu_mutex_lock(&gadget->mutex);
-        qemu_cond_signal(&gadget->rg_int_mask);
-        qemu_mutex_unlock(&gadget->mutex);
+    g_assert(intr_num < DWC_USB3_DEVICE_NUM_INT && intr_num >= 0);
+    ev_buf = &s->dwc3_dev.ev_buffs[intr_num];
+    if (!ev_buf->length && val64) {
+        ev_buf->length = val64 & 0xFFFC;
+        g_assert(ev_buf->length >= 32);
     }
+
+    if (s->regs[DWC3_GEVNTSIZ(intr_num)] & BIT(31)) {
+        ev_buf->flags |= DWC3_EVENT_BUFF_INTMASK;
+		//qemu_log("%s: int: %d, mask\n", __func__, intr_num);
+	}
+    else {
+        ev_buf->flags &= ~DWC3_EVENT_BUFF_INTMASK;
+		//qemu_log("%s: int: %d, unmask\n", __func__, intr_num);
+	}
+
+    // if (!(s->regs[DWC3_GEVNTSIZ(intr_num)] & BIT(31)) && gadget->raw_gadget_fd > 0) {
+    //     qemu_mutex_lock(&gadget->mutex);
+    //     qemu_cond_signal(&gadget->rg_int_mask);
+    //     qemu_mutex_unlock(&gadget->mutex);
+    // }
 }
 
 static const RegisterAccessInfo usb_dwc3_regs_info[] = {
@@ -1012,82 +1237,94 @@ static const RegisterAccessInfo usb_dwc3_regs_info[] = {
         .unimp = 0xffffffff,
     },{ .name = "GEVNTADRLO_0",  .addr = A_GEVNTADRLO_0,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrlo_postwr,
     },{ .name = "GEVNTADRHI_0",  .addr = A_GEVNTADRHI_0,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrhi_postwr,
     },{ .name = "GEVNTSIZ_0",  .addr = A_GEVNTSIZ_0,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .post_write = dwc3_gadget_gevntsize_postwrite,
+        .post_write = dwc3_gadget_gevntsize_postwr,
     },{ .name = "GEVNTCOUNT_0",  .addr = A_GEVNTCOUNT_0,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .pre_write = dwc3_gadget_gevntcount_prewrite,
-        .post_read = dwc3_gadget_gevntcount_read,
+        .pre_write = dwc3_gadget_gevntcount_prewr,
+        .post_read = dwc3_gadget_gevntcount_postrd,
     },{ .name = "GEVNTADRLO_1",  .addr = A_GEVNTADRLO_1,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrlo_postwr,
     },{ .name = "GEVNTADRHI_1",  .addr = A_GEVNTADRHI_1,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrhi_postwr,
     },{ .name = "GEVNTSIZ_1",  .addr = A_GEVNTSIZ_1,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .post_write = dwc3_gadget_gevntsize_postwrite,
+        .post_write = dwc3_gadget_gevntsize_postwr,
     },{ .name = "GEVNTCOUNT_1",  .addr = A_GEVNTCOUNT_1,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .pre_write = dwc3_gadget_gevntcount_prewrite,
-        .post_read = dwc3_gadget_gevntcount_read,
+        .pre_write = dwc3_gadget_gevntcount_prewr,
+        .post_read = dwc3_gadget_gevntcount_postrd,
     },{ .name = "GEVNTADRLO_2",  .addr = A_GEVNTADRLO_2,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrlo_postwr,
     },{ .name = "GEVNTADRHI_2",  .addr = A_GEVNTADRHI_2,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrhi_postwr,
     },{ .name = "GEVNTSIZ_2",  .addr = A_GEVNTSIZ_2,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .post_write = dwc3_gadget_gevntsize_postwrite,
+        .post_write = dwc3_gadget_gevntsize_postwr,
     },{ .name = "GEVNTCOUNT_2",  .addr = A_GEVNTCOUNT_2,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .pre_write = dwc3_gadget_gevntcount_prewrite,
-        .post_read = dwc3_gadget_gevntcount_read,
+        .pre_write = dwc3_gadget_gevntcount_prewr,
+        .post_read = dwc3_gadget_gevntcount_postrd,
     },{ .name = "GEVNTADRLO_3",  .addr = A_GEVNTADRLO_3,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrlo_postwr,
     },{ .name = "GEVNTADRHI_3",  .addr = A_GEVNTADRHI_3,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrhi_postwr,
     },{ .name = "GEVNTSIZ_3",  .addr = A_GEVNTSIZ_3,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .post_write = dwc3_gadget_gevntsize_postwrite,
+        .post_write = dwc3_gadget_gevntsize_postwr,
     },{ .name = "GEVNTCOUNT_3",  .addr = A_GEVNTCOUNT_3,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .pre_write = dwc3_gadget_gevntcount_prewrite,
-        .post_read = dwc3_gadget_gevntcount_read,
+        .pre_write = dwc3_gadget_gevntcount_prewr,
+        .post_read = dwc3_gadget_gevntcount_postrd,
     },{ .name = "GEVNTADRLO_4",  .addr = A_GEVNTADRLO_4,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrlo_postwr,
     },{ .name = "GEVNTADRHI_4",  .addr = A_GEVNTADRHI_4,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrhi_postwr,
     },{ .name = "GEVNTSIZ_4",  .addr = A_GEVNTSIZ_4,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .post_write = dwc3_gadget_gevntsize_postwrite,
+        .post_write = dwc3_gadget_gevntsize_postwr,
     },{ .name = "GEVNTCOUNT_4",  .addr = A_GEVNTCOUNT_4,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .pre_write = dwc3_gadget_gevntcount_prewrite,
-        .post_read = dwc3_gadget_gevntcount_read,
+        .pre_write = dwc3_gadget_gevntcount_prewr,
+        .post_read = dwc3_gadget_gevntcount_postrd,
     },{ .name = "GEVNTADRLO_5",  .addr = A_GEVNTADRLO_5,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrlo_postwr,
     },{ .name = "GEVNTADRHI_5",  .addr = A_GEVNTADRHI_5,
         .unimp = 0xffffffff,
+        .post_write = dwc3_gadget_gevntaddrhi_postwr,
     },{ .name = "GEVNTSIZ_5",  .addr = A_GEVNTSIZ_5,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .post_write = dwc3_gadget_gevntsize_postwrite,
+        .post_write = dwc3_gadget_gevntsize_postwr,
     },{ .name = "GEVNTCOUNT_5",  .addr = A_GEVNTCOUNT_5,
         .ro = 0x7fff0000,
         .unimp = 0xffffffff,
-        .pre_write = dwc3_gadget_gevntcount_prewrite,
-        .post_read = dwc3_gadget_gevntcount_read,
+        .pre_write = dwc3_gadget_gevntcount_prewr,
+        .post_read = dwc3_gadget_gevntcount_postrd,
     },{ .name = "GHWPARAMS8",  .addr = A_GHWPARAMS8,
         .ro = 0xffffffff,
     },{ .name = "GTXFIFOPRIDEV",  .addr = A_GTXFIFOPRIDEV,
@@ -1121,7 +1358,7 @@ static const RegisterAccessInfo usb_dwc3_regs_info[] = {
         .rsvd = 0xfffe8C00,
         .unimp = 0xffffffff,
     }, { .name = "DSTS", .addr = A_DSTS,
-        .reset = 0xd20001,
+        .reset = 0xd20000,
         .ro = 0x33ffffff,
         .rsvd = 0xcc000000,
     }, { .name = "DGCMDPAR", .addr = A_DGCMDPAR,
@@ -1352,6 +1589,7 @@ static void usb_dwc3_init(Object *obj)
 
     s->cfg.mode = HOST_MODE;
 
+    memset(&s->dwc3_dev, 0x0, sizeof(s->dwc3_dev));
     gadget = &s->dwc3_dev;
     dwc3_device_init(gadget);
     dwc3_device_setup_regs(gadget, s->regs);
