@@ -110,6 +110,13 @@ void usb_raw_run(int fd);
 int usb_raw_ep0_write(int fd, struct usb_raw_ep_io *io);
 int usb_raw_ep0_read(int fd, struct usb_raw_ep_io *io);
 void *usb_ep0_loop_thread(void *arg);
+void *ep_bulk_out_loop(void *arg);
+void *ep_bulk_in_loop(void *arg);
 void usb_raw_ep0_stall(int fd);
+int usb_raw_ep_read(int fd, struct usb_raw_ep_io *io);
+int usb_raw_ep_write(int fd, struct usb_raw_ep_io *io);
+
+int usb_raw_memcpy_bulk_out_data(void *dst);
+void usb_raw_memcpy_bulk_in_data(void *src, int len);
 
 #endif /* RAW_GADGET_H__ */
