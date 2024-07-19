@@ -204,7 +204,7 @@ static void create_uart(LambertSoC *s)
 		MemoryRegion *mr;
 
 		object_initialize_child(OBJECT(s), name, &s->apu.peri.uarts[i],
-								TYPE_DW_UART);
+								TYPE_DWC_UART);
 		dev = DEVICE(&s->apu.peri.uarts[i]);
 		qdev_prop_set_uint8(dev, "regshift", 2);
 		qdev_prop_set_uint32(dev, "baudbase", 115200);

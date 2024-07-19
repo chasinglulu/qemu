@@ -26,7 +26,7 @@
 #include "hw/arm/boot.h"
 #include "hw/intc/arm_gic.h"
 #include "qom/object.h"
-#include "hw/char/dw_uart.h"
+#include "hw/char/dwc-apb-uart.h"
 #include "qemu/log.h"
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
@@ -149,7 +149,7 @@ struct LagunaSoC {
 	/*< public >*/
 	struct {
 		struct {
-			DWUARTState uarts[LUA_SOC_NR_APU_UARTS];
+			DWCUARTState uarts[LUA_SOC_NR_APU_UARTS];
 			SDHCIState mmc[LUA_SOC_NR_SDHCI];
 			DWSPIState ospi[LUA_SOC_NR_OSPI];
 			DWAPBGPIOState gpios[LUA_SOC_NR_GPIO];

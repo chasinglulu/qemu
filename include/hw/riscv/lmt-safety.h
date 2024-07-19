@@ -25,7 +25,7 @@
 #include "qemu/units.h"
 #include "hw/riscv/boot.h"
 #include "qom/object.h"
-#include "hw/char/dw_uart.h"
+#include "hw/char/dwc-apb-uart.h"
 #include "hw/intc/riscv_clic.h"
 #include "hw/intc/riscv_aclint.h"
 #include "qemu/log.h"
@@ -68,7 +68,7 @@ struct LambertSafety {
 	/*< public >*/
 	struct {
 		struct {
-			DWUARTState uarts[LMT_SAFETY_NR_UARTS];
+			DWCUARTState uarts[LMT_SAFETY_NR_UARTS];
 		} peri;
 
 		RISCVHartArrayState cpus;

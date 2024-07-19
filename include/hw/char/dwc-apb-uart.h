@@ -1,8 +1,7 @@
 /*
- * DW UART emulation
+ * Synopsys DesignWare APB UART emulation
  *
  * Copyright (C) 2023 Charleye <wangkart@aliyun.com>
- *
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -23,22 +22,22 @@
 
 #include "hw/char/serial.h"
 
-#define DW_UART_REG_SIZE  0xE0
-#define DW_UART_NUM_REGS  (DW_UART_REG_SIZE / sizeof(uint32_t))
+#define DWC_UART_REG_SIZE  0xE0
+#define DWC_UART_NUM_REGS  (DWC_UART_REG_SIZE / sizeof(uint32_t))
 
-typedef struct DWUARTState {
+typedef struct DWCUARTState {
 	SysBusDevice parent;
 
 	MemoryRegion container;
 	MemoryRegion iomem;
 
-	uint32_t regs[DW_UART_NUM_REGS];
+	uint32_t regs[DWC_UART_NUM_REGS];
 	uint8_t index;
 
 	SerialMM uart;
-} DWUARTState;
+} DWCUARTState;
 
-#define TYPE_DW_UART  "dw_uart"
-#define DW_UART(obj)  OBJECT_CHECK(DWUARTState, (obj), TYPE_DW_UART)
+#define TYPE_DWC_UART  "dwc-apb-uart"
+#define DWC_UART(obj)  OBJECT_CHECK(DWCUARTState, (obj), TYPE_DWC_UART)
 
 #endif

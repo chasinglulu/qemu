@@ -26,7 +26,7 @@
 #include "hw/arm/boot.h"
 #include "hw/intc/arm_gic.h"
 #include "qom/object.h"
-#include "hw/char/dw_uart.h"
+#include "hw/char/dwc-apb-uart.h"
 #include "qemu/log.h"
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
@@ -107,7 +107,7 @@ struct LagunaSafety {
 	/*< public >*/
 	struct {
 		struct {
-			DWUARTState uarts[LUA_SAFETY_NR_MPU_UARTS];
+			DWCUARTState uarts[LUA_SAFETY_NR_MPU_UARTS];
 			CadenceTTCState ttc[LUA_SAFETY_NR_TIMER];
 			SDHCIState mmc[LUA_SAFETY_NR_SDHCI];
 			DesignwareEtherQoSState eqos;
