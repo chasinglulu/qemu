@@ -104,6 +104,11 @@ static const MemMapEntry unimp_memmap[] = {
 	/* USB PHY */
 	{ 0x0E100000, 0x100000 },
 
+	/* safety */
+	{ 0x00600000, 0x1000 },
+	{ 0x006D2000, 0x1000 },
+	{ 0x00601000, 0x1000 },
+
 	/* each subsystem global ctrl regions */
 	{ 0x06100000, 0x1000 },
 	{ 0x08010000, 0x1000 },
