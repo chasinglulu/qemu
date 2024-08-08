@@ -141,10 +141,10 @@ static const MemMapEntry unimp_memmap[] = {
 static const int apu_irqmap[] = {
 	[VIRT_EMMC]     = 0,
 	[VIRT_OSPI]     = 3,
-	[VIRT_EMAC]     = 160,
-	[VIRT_GPIO]     = 164,
-	[VIRT_UART1]    = 167,
-	[VIRT_UART4]    = 170,
+	[VIRT_EMAC]     = 156,
+	[VIRT_GPIO]     = 160,
+	[VIRT_UART1]    = 164,
+	[VIRT_UART4]    = 167,
 };
 
 struct LagunaSoC {
