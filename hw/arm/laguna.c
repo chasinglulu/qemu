@@ -207,14 +207,16 @@ static void create_uart0(LagunaSoC *s)
 	const char *name = "safety_uart0";
 	DeviceState *dev;
 	MemoryRegion *mr;
+	int i;
 
-	object_initialize_child(OBJECT(s), name, &s->apu.peri.uarts[0],
+	i = s->cfg.match ? 0 : 5;
+	object_initialize_child(OBJECT(s), name, &s->apu.peri.uarts[i],
 							TYPE_DWC_UART);
-	dev = DEVICE(&s->apu.peri.uarts[0]);
+	dev = DEVICE(&s->apu.peri.uarts[i]);
 	qdev_prop_set_uint8(dev, "regshift", 2);
 	qdev_prop_set_uint32(dev, "baudbase", 115200);
 	qdev_prop_set_uint8(dev, "endianness", DEVICE_LITTLE_ENDIAN);
-	qdev_prop_set_chr(dev, "chardev", serial_hd(5));
+	qdev_prop_set_chr(dev, "chardev", serial_hd(i));
 	qdev_prop_set_uint8(dev, "index", 0);
 	sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
@@ -229,9 +231,11 @@ static void create_uart4(LagunaSoC *s)
 	hwaddr base = base_memmap[VIRT_UART4].base;
 	hwaddr size = base_memmap[VIRT_UART4].size;
 	DeviceState *gicdev = DEVICE(&s->apu.gic);
-	int i;
+	int i, limit;
 
-	for (i = 4; i < 6; i++) {
+	i = s->cfg.match ? 4 : 3;
+	limit = s->cfg.match ? 6 : 5;
+	for (; i < limit; i++) {
 		char *name = g_strdup_printf("uart%d", i);
 		DeviceState *dev;
 		MemoryRegion *mr;
@@ -242,7 +246,7 @@ static void create_uart4(LagunaSoC *s)
 		qdev_prop_set_uint8(dev, "regshift", 2);
 		qdev_prop_set_uint32(dev, "baudbase", 115200);
 		qdev_prop_set_uint8(dev, "endianness", DEVICE_LITTLE_ENDIAN);
-		qdev_prop_set_chr(dev, "chardev", serial_hd(i - 1));
+		qdev_prop_set_chr(dev, "chardev", serial_hd(i));
 		qdev_prop_set_uint8(dev, "index", i);
 		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
@@ -264,9 +268,11 @@ static void create_uart1(LagunaSoC *s)
 	hwaddr base = base_memmap[VIRT_UART1].base;
 	hwaddr size = base_memmap[VIRT_UART1].size;
 	DeviceState *gicdev = DEVICE(&s->apu.gic);
-	int i;
+	int i, limit;
 
-	for (i = 1; i < 4; i++) {
+	i = s->cfg.match ? 1 : 0;
+	limit = s->cfg.match ? 4 : 3;
+	for (; i < limit; i++) {
 		char *name = g_strdup_printf("uart%d", i);
 		DeviceState *dev;
 		MemoryRegion *mr;
@@ -277,7 +283,7 @@ static void create_uart1(LagunaSoC *s)
 		qdev_prop_set_uint8(dev, "regshift", 2);
 		qdev_prop_set_uint32(dev, "baudbase", 115200);
 		qdev_prop_set_uint8(dev, "endianness", DEVICE_LITTLE_ENDIAN);
-		qdev_prop_set_chr(dev, "chardev", serial_hd(i - 1));
+		qdev_prop_set_chr(dev, "chardev", serial_hd(i));
 		qdev_prop_set_uint8(dev, "index", i);
 		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
@@ -627,6 +633,7 @@ static Property lua_soc_properties[] = {
 	DEFINE_PROP_UINT8("bootmode", LagunaSoC, cfg.bootmode, 0x0),
 	DEFINE_PROP_STRING("nor-flash", LagunaSoC, cfg.nor_flash),
 	DEFINE_PROP_BOOL("download", LagunaSoC, cfg.download, false),
+	DEFINE_PROP_BOOL("match", LagunaSoC, cfg.match, false),
 	DEFINE_PROP_END_OF_LIST()
 };
 

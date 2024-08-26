@@ -58,6 +58,7 @@ struct LagunaVirt {
 		const char *nor_flash;
 		const char *nand;
 		bool download;
+		bool match;
 	} cfg;
 };
 
@@ -80,6 +81,13 @@ static void lua_virt_set_download(Object *obj, bool value, Error **errp)
 	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
 
 	s->cfg.download = value;
+}
+
+static void lua_virt_set_match(Object *obj, bool value, Error **errp)
+{
+	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
+
+	s->cfg.match = value;
 }
 
 static void lua_virt_set_part_config(Object *obj, Visitor *v,
@@ -634,6 +642,10 @@ static void lua_virt_mach_init(MachineState *machine)
 		object_property_set_bool(OBJECT(&vms->lua), "download",
 								vms->cfg.download, &error_abort);
 
+	if (vms->cfg.match)
+		object_property_set_bool(OBJECT(&vms->lua), "match",
+								vms->cfg.match, &error_abort);
+
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->lua), &error_fatal);
 
 	create_fdt(vms);
@@ -707,6 +719,8 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 					lua_virt_set_nor_flash);
 	object_class_property_add_bool(oc, "download", NULL,
 					lua_virt_set_download);
+	object_class_property_add_bool(oc, "match", NULL,
+					lua_virt_set_match);
 }
 
 static void lua_virt_mach_finalize(Object *obj)

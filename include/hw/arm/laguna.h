@@ -193,6 +193,8 @@ struct LagunaSoC {
 		bool download;
 		/* NOR FLash model */
 		char *nor_flash;
+		/* UART 0...5 <--> chrdev serial 0...5 */
+		bool match;
 	} cfg;
 };
 
