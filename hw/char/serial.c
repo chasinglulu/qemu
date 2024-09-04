@@ -118,6 +118,7 @@ static inline void recv_fifo_put(SerialState *s, uint8_t chr)
 static void serial_update_irq(SerialState *s)
 {
     uint8_t tmp_iir = UART_IIR_NO_INT;
+    struct SerialMM *mm;
 
     if ((s->ier & UART_IER_RLSI) && (s->lsr & UART_LSR_INT_ANY)) {
         tmp_iir = UART_IIR_RLSI;
@@ -137,6 +138,12 @@ static void serial_update_irq(SerialState *s)
     }
 
     s->iir = tmp_iir | (s->iir & 0xF0);
+    if (DEVICE(s)->id) {
+        trace_serial_irq_state(s, DEVICE(s)->id, tmp_iir != UART_IIR_NO_INT);
+    } else {
+        mm = container_of(s, struct SerialMM, serial);
+        trace_serial_irq_state(s, DEVICE(mm)->id, tmp_iir != UART_IIR_NO_INT);
+    }
 
     if (tmp_iir != UART_IIR_NO_INT) {
         qemu_irq_raise(s->irq);
