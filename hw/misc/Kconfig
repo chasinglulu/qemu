@@ -174,4 +174,7 @@ config VIRT_CTRL
 config LASI
     bool
 
+config LUA_PMU
+    bool
+
 source macio/Kconfig
