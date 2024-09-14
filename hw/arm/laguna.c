@@ -62,6 +62,7 @@ static void lua_soc_set_secure(Object *obj, bool value, Error **errp)
 	s->cfg.secure = value;
 }
 
+uint8_t start_powered_off;
 static void create_apu(LagunaSoC *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
@@ -77,6 +78,7 @@ static void create_apu(LagunaSoC *s)
 			/* Secondary CPUs start in powered-down state */
 			object_property_set_bool(cpuobj, "start-powered-off", true,
 										&error_abort);
+			start_powered_off |= BIT(i);
 		}
 
 		object_property_set_int(cpuobj, "mp-affinity",
@@ -95,6 +97,22 @@ static void create_apu(LagunaSoC *s)
 
 		qdev_realize(DEVICE(cpuobj), NULL, &error_fatal);
 	}
+}
+
+static void create_a55_ctrl(LagunaSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	hwaddr base = base_memmap[VIRT_A55_CTRL].base;
+	DeviceState *dev;
+	MemoryRegion *mr;
+
+	object_initialize_child(OBJECT(s), "a55_cpu_ctrl", &s->apu.cc,
+	                           TYPE_LUA_CORE_CTRL);
+	dev = DEVICE(&s->apu.cc);
+	qdev_prop_set_uint32(dev, "start-powered-off", start_powered_off);
+	sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+	mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+	memory_region_add_subregion(sysmem, base, mr);
 }
 
 static void create_gic(LagunaSoC *s)
@@ -603,6 +621,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	int i;
 
 	create_apu(s);
+	create_a55_ctrl(s);
 	create_gic(s);
 	create_gpio(s);
 	create_uart(s);

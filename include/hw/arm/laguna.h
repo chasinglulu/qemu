@@ -35,6 +35,7 @@
 #include "hw/gpio/dwapb_gpio.h"
 #include "hw/net/dwc_eth_qos.h"
 #include "hw/usb/hcd-dwc3.h"
+#include "hw/misc/axera_a55_ctrl.h"
 
 #define TYPE_LUA_SOC "laguna-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(LagunaSoC, LUA_SOC)
@@ -67,6 +68,7 @@ enum {
 	VIRT_GIC_CPU,
 	VIRT_GIC_HYP,
 	VIRT_GIC_VCPU,
+	VIRT_A55_CTRL,
 	VIRT_EMMC,
 	VIRT_OSPI,
 	VIRT_EMAC,
@@ -87,6 +89,7 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_GIC_CPU]           =    { 0x08002000, 0x00002000 },
 	[VIRT_GIC_HYP]           =    { 0x08004000, 0x00002000 },
 	[VIRT_GIC_VCPU]          =    { 0x08006000, 0x00002000 },
+	[VIRT_A55_CTRL]          =    { 0x08010000, 0x00001000 },
 	[VIRT_EMMC]              =    { 0x0C010000, 0x00002000 },
 	[VIRT_OSPI]              =    { 0x0C040000, 0x00001000 },
 	[VIRT_EMAC]              =    { 0x0E014000, 0x00004000 },
@@ -111,7 +114,6 @@ static const MemMapEntry unimp_memmap[] = {
 
 	/* each subsystem global ctrl regions */
 	{ 0x06100000, 0x1000 },
-	{ 0x08010000, 0x1000 },
 	{ 0x0A001000, 0x1000 },
 	{ 0x0C000000, 0x1000 },
 	{ 0x0E000000, 0x1000 },
@@ -164,6 +166,7 @@ struct LagunaSoC {
 
 		ARMCPU cpus[LUA_SOC_NR_ACPUS];
 		GICState gic;
+		LUACoreCtrlState cc;
 	} apu;
 
 	MemoryRegion mr_ddr;
