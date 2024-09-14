@@ -177,4 +177,7 @@ config LASI
 config LUA_PMU
     bool
 
+config LUA_CORE_CTRL
+    bool
+
 source macio/Kconfig
