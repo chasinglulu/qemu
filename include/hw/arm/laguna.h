@@ -111,6 +111,7 @@ static const MemMapEntry unimp_memmap[] = {
 	{ 0x00600000, 0x1000 },
 	{ 0x006D2000, 0x1000 },
 	{ 0x00601000, 0x1000 },
+	{ 0x006C4000, 0x1000 },
 
 	/* each subsystem global ctrl regions */
 	{ 0x06100000, 0x1000 },
