@@ -50,7 +50,7 @@ uint16_t rpmb_get_request(struct s_rpmb *rpmb_req)
     case RPMB_REQ_KEY ... RPMB_REQ_STATUS:
         return request;
     default:
-        qemu_log_mask(LOG_GUEST_ERROR, "Invalid RPMB request type\n");
+        qemu_log_mask(LOG_STRACE, "Invalid RPMB request type\n");
     }
 
     return 0;
