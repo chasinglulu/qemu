@@ -42,27 +42,30 @@ OBJECT_DECLARE_SIMPLE_TYPE(LagunaSoC, LUA_SOC)
 
 #define LUA_SOC_ACPU_TYPE ARM_CPU_TYPE_NAME("cortex-a55")
 
-#define LUA_SOC_CLUSTER_SIZE		4
-#define LUA_SOC_CLUSTERS			1
-#define LUA_SOC_NR_ACPUS			4
-#define LUA_SOC_NR_APU_UARTS		6
-#define LUA_SOC_NR_SDHCI			2
-#define LUA_SOC_NR_GPIO				2
-#define LUA_SOC_NR_OSPI				1
-#define LUA_SOC_NUM_IRQS			480
-#define LUA_BOOTSTRAP_PINS			3
+#define LUA_SOC_CLUSTER_SIZE         4
+#define LUA_SOC_CLUSTERS             1
+#define LUA_SOC_NR_ACPUS             4
+#define LUA_SOC_NR_APU_UARTS         6
+#define LUA_SOC_NR_SDHCI             2
+#define LUA_SOC_NR_GPIO              2
+#define LUA_SOC_NR_OSPI              1
+#define LUA_SOC_NR_QSPI              1
+#define LUA_SOC_NUM_IRQS             480
+#define LUA_BOOTSTRAP_PINS           5
 
-#define ARCH_VITRUAL_PMU_IRQ		7
-#define ARCH_GIC_MAINT_IRQ			9
-#define ARCH_TIMER_VIRT_IRQ			11
-#define ARCH_TIMER_S_EL1_IRQ		13
-#define ARCH_TIMER_NS_EL1_IRQ		14
-#define ARCH_TIMER_NS_EL2_IRQ		10
+#define ARCH_VITRUAL_PMU_IRQ         7
+#define ARCH_GIC_MAINT_IRQ           9
+#define ARCH_TIMER_VIRT_IRQ          11
+#define ARCH_TIMER_S_EL1_IRQ         13
+#define ARCH_TIMER_NS_EL1_IRQ        14
+#define ARCH_TIMER_NS_EL2_IRQ        10
 
 enum {
 	VIRT_BOOTROM_SAFETY,
 	VIRT_OCM_SAFETY,
 	VIRT_IRAM_SAFETY,
+	VIRT_SAFETY_QSPI,
+	VIRT_SAFETY_EMAC,
 	VIRT_SAFETY_UART0,
 	VIRT_GIC_DIST,
 	VIRT_GIC_CPU,
@@ -84,6 +87,8 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_BOOTROM_SAFETY]    =    { 0xFFFF0000, 0x00010000 },
 	[VIRT_OCM_SAFETY]        =    { 0x00200000, 0x00200000 },
 	[VIRT_IRAM_SAFETY]       =    { 0x00400000, 0x00010000 },
+	[VIRT_SAFETY_QSPI]       =    { 0x0051F000, 0x00001000 },
+	[VIRT_SAFETY_EMAC]       =    { 0x00534000, 0x00004000 },
 	[VIRT_SAFETY_UART0]      =    { 0x00602000, 0x00001000 },
 	[VIRT_GIC_DIST]          =    { 0x08001000, 0x00001000 },
 	[VIRT_GIC_CPU]           =    { 0x08002000, 0x00002000 },
@@ -141,12 +146,15 @@ static const MemMapEntry unimp_memmap[] = {
 };
 
 static const int apu_irqmap[] = {
-	[VIRT_EMMC]     = 0,
-	[VIRT_OSPI]     = 3,
-	[VIRT_EMAC]     = 156,
-	[VIRT_GPIO]     = 160,
-	[VIRT_UART1]    = 164,
-	[VIRT_UART4]    = 167,
+	[VIRT_EMMC]            = 30,
+	[VIRT_OSPI]            = 33,
+	[VIRT_SAFETY_UART0]    = 84,
+	[VIRT_SAFETY_QSPI]     = 112,
+	[VIRT_SAFETY_EMAC]     = 113,
+	[VIRT_EMAC]            = 156,
+	[VIRT_GPIO]            = 160,
+	[VIRT_UART1]           = 164,
+	[VIRT_UART4]           = 167,
 };
 
 struct LagunaSoC {
@@ -159,6 +167,7 @@ struct LagunaSoC {
 			DWCUARTState uarts[LUA_SOC_NR_APU_UARTS];
 			SDHCIState mmc[LUA_SOC_NR_SDHCI];
 			DWSPIState ospi[LUA_SOC_NR_OSPI];
+			DWSPIState qspi[LUA_SOC_NR_QSPI];
 			DWAPBGPIOState gpios[LUA_SOC_NR_GPIO];
 			DesignwareEtherQoSState eqos;
 			USBDWC3 usb;

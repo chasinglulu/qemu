@@ -221,7 +221,9 @@ static void create_gpio(LagunaSoC *s)
 static void create_uart0(LagunaSoC *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
+	int irq = apu_irqmap[VIRT_SAFETY_UART0];
 	hwaddr base = base_memmap[VIRT_SAFETY_UART0].base;
+	DeviceState *gicdev = DEVICE(&s->apu.gic);
 	const char *name = "safety_uart0";
 	DeviceState *dev;
 	MemoryRegion *mr;
@@ -235,11 +237,13 @@ static void create_uart0(LagunaSoC *s)
 	qdev_prop_set_uint32(dev, "baudbase", 115200);
 	qdev_prop_set_uint8(dev, "endianness", DEVICE_LITTLE_ENDIAN);
 	qdev_prop_set_chr(dev, "chardev", serial_hd(i));
-	qdev_prop_set_uint8(dev, "index", 0);
+	qdev_prop_set_uint8(dev, "index", i);
 	sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
 
 	mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
 	memory_region_add_subregion(sysmem, base, mr);
+
+	sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
 }
 
 static void create_uart4(LagunaSoC *s)
@@ -348,16 +352,17 @@ static DeviceState* create_nor_flash(LagunaSoC *s, int unit)
 	static DeviceState *nor_flash;
 	DriveInfo *dinfo = drive_get(IF_MTD, 0, unit);
 
+	if (!dinfo)
+		return NULL;
+
 	if (!nor_flash_valid(s->cfg.nor_flash)) {
 		error_report("Flash model %s not supported", s->cfg.nor_flash);
 		exit(1);
 	}
 
 	nor_flash = qdev_new(s->cfg.nor_flash);
-	if (dinfo) {
-		qdev_prop_set_drive_err(nor_flash, "drive",
-						blk_by_legacy_dinfo(dinfo), &error_fatal);
-	}
+	qdev_prop_set_drive_err(nor_flash, "drive",
+			blk_by_legacy_dinfo(dinfo), &error_fatal);
 
 	return nor_flash;
 }
@@ -367,16 +372,78 @@ static DeviceState* create_nand_flash(LagunaSoC *s, int unit)
 	static DeviceState *nand;
 	DriveInfo *dinfo = drive_get(IF_MTD, 0, unit);
 
+	if (!dinfo)
+		return NULL;
+
 	nand = qdev_new("TC58CVG2S0HRAIG");
-	if (dinfo) {
-		qdev_prop_set_drive_err(nand, "drive",
-						blk_by_legacy_dinfo(dinfo), &error_fatal);
-	}
+	qdev_prop_set_drive_err(nand, "drive",
+			blk_by_legacy_dinfo(dinfo), &error_fatal);
 
 	return nand;
 }
 
-static void create_spi_nor_flash(LagunaSoC *s)
+static void create_qspi_flash(LagunaSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	int irq = apu_irqmap[VIRT_SAFETY_QSPI];
+	hwaddr base = base_memmap[VIRT_SAFETY_QSPI].base;
+	hwaddr size = base_memmap[VIRT_SAFETY_QSPI].size;
+	DeviceState *gicdev = DEVICE(&s->apu.gic);
+	DeviceState *nor_dev, *nand_dev;
+	BusState *spi_bus;
+	qemu_irq cs_line;
+	const int flash_num = 2;
+	int i, j;
+
+	for (i = 0; i < ARRAY_SIZE(s->apu.peri.qspi); i++) {
+		char *name = g_strdup_printf("qspi%d", i);
+		DeviceState *dev;
+		MemoryRegion *mr;
+
+		object_initialize_child(OBJECT(s), name, &s->apu.peri.qspi[i],
+								TYPE_DESIGNWARE_SPI);
+		dev = DEVICE(&s->apu.peri.qspi[i]);
+		qdev_prop_set_uint32(dev, "num-cs", flash_num);
+		qdev_prop_set_uint32(dev, "len-flash-dev", flash_num);
+		for (j = 0; j < flash_num; j++) {
+			char *propname = g_strdup_printf("flash-dev[%d]", j);
+			if (j)
+				nand_dev = create_nand_flash(s, j + 2);
+			else
+				nor_dev = create_nor_flash(s, j + 2);
+			qdev_prop_set_uint64(dev, propname, (uint64_t)(j ? nand_dev : nor_dev));
+			g_free(propname);
+		}
+
+		sysbus_realize(SYS_BUS_DEVICE(dev), &error_fatal);
+
+		mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+		memory_region_add_subregion(sysmem, base, mr);
+
+		sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+		                                qdev_get_gpio_in(gicdev, irq));
+		spi_bus = BUS(s->apu.peri.qspi[i].spi);
+		base += size;
+		irq += 1;
+		g_free(name);
+
+		/* nor flash memory */
+		if (nor_dev) {
+			qdev_realize_and_unref(nor_dev, spi_bus, &error_fatal);
+			cs_line = qdev_get_gpio_in_named(nor_dev, SSI_GPIO_CS, 0);
+			sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.qspi[i]), 1, cs_line);
+		}
+
+		/* nand flash memory */
+		if (nand_dev) {
+			qdev_realize_and_unref(nand_dev, spi_bus, &error_fatal);
+			cs_line = qdev_get_gpio_in_named(nand_dev, SSI_GPIO_CS, 0);
+			sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.qspi[i]), 2, cs_line);
+		}
+	}
+}
+
+static void create_ospi_flash(LagunaSoC *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
 	int irq = apu_irqmap[VIRT_OSPI];
@@ -422,14 +489,18 @@ static void create_spi_nor_flash(LagunaSoC *s)
 		g_free(name);
 
 		/* nor flash memory */
-		qdev_realize_and_unref(nor_dev, spi_bus, &error_fatal);
-		cs_line = qdev_get_gpio_in_named(nor_dev, SSI_GPIO_CS, 0);
-		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.ospi[i]), 1, cs_line);
+		if (nor_dev) {
+			qdev_realize_and_unref(nor_dev, spi_bus, &error_fatal);
+			cs_line = qdev_get_gpio_in_named(nor_dev, SSI_GPIO_CS, 0);
+			sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.ospi[i]), 1, cs_line);
+		}
 
 		/* nand flash memory */
-		qdev_realize_and_unref(nand_dev, spi_bus, &error_fatal);
-		cs_line = qdev_get_gpio_in_named(nand_dev, SSI_GPIO_CS, 0);
-		sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.ospi[i]), 2, cs_line);
+		if (nand_dev) {
+			qdev_realize_and_unref(nand_dev, spi_bus, &error_fatal);
+			cs_line = qdev_get_gpio_in_named(nand_dev, SSI_GPIO_CS, 0);
+			sysbus_connect_irq(SYS_BUS_DEVICE(&s->apu.peri.ospi[i]), 2, cs_line);
+		}
 	}
 }
 
@@ -628,7 +699,8 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_ethernet(s);
 	create_usb(s);
 	create_emmc(s);
-	create_spi_nor_flash(s);
+	create_ospi_flash(s);
+	create_qspi_flash(s);
 	create_ddr_memmap(s);
 	create_unimp(s);
 
