@@ -704,12 +704,13 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_ddr_memmap(s);
 	create_unimp(s);
 
-	for (i = 0; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
-		if (s->cfg.has_emmc && i == 0) {
-			create_emmc_card(s, &s->apu.peri.mmc[i], i);
-			continue;
-		}
-		create_sd_card(&s->apu.peri.mmc[i], i);
+
+	if (s->cfg.has_emmc)
+		create_emmc_card(s, &s->apu.peri.mmc[0], 0);
+
+	i = s->cfg.has_emmc ? 1 : 0;
+	for (; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
+		create_sd_card(&s->apu.peri.mmc[i], s->cfg.has_emmc ? (i - 1) : i);
 	}
 
 	create_bootmode(s);
