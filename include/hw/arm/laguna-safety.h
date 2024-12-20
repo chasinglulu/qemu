@@ -93,6 +93,10 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_BOOTROM]           =    { 0xFFFF0000, 0x00010000 },
 };
 
+static const MemMapEntry unimp_memmap[] = {
+	{ 0x00600000, 0x00001000 },
+};
+
 static const int mpu_irqmap[] = {
 	[VIRT_UART] = 10,	/* ...to 14 + LUA_SAFETY_NR_APU_UARTS - 1 */
 	[VIRT_EMAC] = 43,

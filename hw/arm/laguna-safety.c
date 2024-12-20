@@ -488,6 +488,18 @@ static void create_memmap(LagunaSafety *s)
 	memory_region_add_subregion(sysmem, iram_base, &s->mr_iram);
 }
 
+static void create_unimp(LagunaSafety *s)
+{
+	int i;
+	char *name;
+
+	for (i = 0; i < ARRAY_SIZE(unimp_memmap); i++) {
+		name = g_strdup_printf("unimp_device@%08lx", unimp_memmap[i].base);
+		create_unimplemented_device(name, unimp_memmap[i].base, unimp_memmap[i].size);
+		g_free(name);
+	}
+}
+
 static void lua_safety_realize(DeviceState *dev, Error **errp)
 {
 	LagunaSafety *s = LUA_SAFETY(dev);
@@ -508,7 +520,7 @@ static void lua_safety_realize(DeviceState *dev, Error **errp)
 	create_ospi_nor_nand_flash(s);
 	create_emmc(s);
 	create_memmap(s);
-	// create_unimp(s);
+	create_unimp(s);
 
 	for (i = 0; i < ARRAY_SIZE(s->mpu.peri.mmc); i++) {
 		if (i == 0) {
