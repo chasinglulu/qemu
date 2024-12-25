@@ -1806,6 +1806,29 @@ static sd_rsp_type_t sd_normal_command(SDState *sd, SDRequest req)
         }
         break;
 
+    /* Erase commands (Class 5) */
+    case 35:	/* CMD35:  ERASE_GROUP_START */
+        switch (sd->state) {
+        case sd_transfer_state:
+            sd->erase_start = req.arg;
+            return sd_r1;
+
+        default:
+            break;
+        }
+        break;
+
+    case 36:	/* CMD36:  ERASE_GROUP_END */
+        switch (sd->state) {
+        case sd_transfer_state:
+            sd->erase_end = req.arg;
+            return sd_r1;
+
+        default:
+            break;
+        }
+        break;
+
     case 38:	/* CMD38:  ERASE */
         switch (sd->state) {
         case sd_transfer_state:
