@@ -45,7 +45,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(LagunaSafety, LUA_SAFETY)
 #define LUA_SAFETY_NR_MPU_UARTS		4
 #define LUA_SAFETY_NR_SDHCI			2
 #define LUA_SAFETY_NR_GPIO			2
-#define LUA_SAFETY_NR_TIMER			4
+#define LUA_SAFETY_NR_TIMER			8
 #define LUA_SAFETY_NUM_IRQS			480
 
 #define ARCH_VITRUAL_PMU_IRQ		7
@@ -87,7 +87,7 @@ static const MemMapEntry base_memmap[] = {
 	[VIRT_QSPI]              =    { 0x0051F000, 0x00001000 },
 	[VIRT_EMAC]              =    { 0x00534000, 0x00004000 },
 	[VIRT_UART]              =    { 0x00602000, 0x00001000 },
-	[VIRT_TIMER]             =    { 0x00657000, 0x00001000 },
+	[VIRT_TIMER]             =    { 0x006C7000, 0x00001000 },
 	[VIRT_FLASH_EMMC]        =    { 0x0C010000, 0x00002000 },
 	[VIRT_FLASH_OSPI]        =    { 0x0C040000, 0x00001000 },
 	[VIRT_BOOTROM]           =    { 0xFFFF0000, 0x00010000 },
@@ -98,10 +98,10 @@ static const MemMapEntry unimp_memmap[] = {
 };
 
 static const int mpu_irqmap[] = {
-	[VIRT_UART] = 10,	/* ...to 14 + LUA_SAFETY_NR_APU_UARTS - 1 */
-	[VIRT_EMAC] = 43,
-	[VIRT_TIMER] = 25,
-	[VIRT_QSPI] = 42,
+	[VIRT_UART] = 14,	/* ...to 14 + LUA_SAFETY_NR_APU_UARTS - 1 */
+	[VIRT_EMAC] = 45,
+	[VIRT_TIMER] = 100,
+	[VIRT_QSPI] = 44,
 };
 
 struct LagunaSafety {
