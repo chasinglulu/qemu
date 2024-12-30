@@ -142,4 +142,4 @@ softmmu_ss.add(when: 'CONFIG_LASI', if_true: files('lasi.c'))
 specific_ss.add(when: 'CONFIG_HOBOT_VIRT', if_true: files('hobot-sigi-pmu.c'))
 
 specific_ss.add(when: 'CONFIG_LUA_PMU', if_true: files('axera_pmu.c'))
-specific_ss.add(when: 'CONFIG_LUA_CORE_CTRL', if_true: files('axera_a55_ctrl.c'))
+specific_ss.add(when: 'CONFIG_LUA_CORE_CTRL', if_true: files('axera_a55_ctrl.c', 'axera-bootstrap.c'))

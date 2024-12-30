@@ -667,6 +667,18 @@ static void create_unimp(LagunaSoC *s)
 	}
 }
 
+static void create_bootstrap(LagunaSoC *s)
+{
+	DeviceState *dev;
+
+	dev = qdev_new("laguna.bootstrap");
+
+	qdev_prop_set_uint32(dev, "bootstrap", s->cfg.bootstrap);
+	sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x006D900C);
+
+	sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+}
+
 static void create_bootmode(LagunaSoC *s)
 {
 	int i;
