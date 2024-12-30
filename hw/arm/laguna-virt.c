@@ -55,6 +55,7 @@ struct LagunaVirt {
 		bool has_emmc;
 		uint8_t part_config;
 		uint8_t bootmode;
+		uint32_t bootstrap;
 		const char *nor_flash;
 		const char *nand;
 		bool download;
@@ -88,6 +89,23 @@ static void lua_virt_set_match(Object *obj, bool value, Error **errp)
 	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
 
 	s->cfg.match = value;
+}
+
+static void lua_virt_set_bootstrap(Object *obj, Visitor *v,
+						const char *name, void *opaque,
+						Error **errp)
+{
+	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
+	Error *error = NULL;
+	uint32_t value;
+
+	visit_type_uint32(v, name, &value, &error);
+	if (error) {
+		error_propagate(errp, error);
+		return;
+	}
+
+	s->cfg.bootstrap = value;
 }
 
 static void lua_virt_set_part_config(Object *obj, Visitor *v,
@@ -646,6 +664,10 @@ static void lua_virt_mach_init(MachineState *machine)
 		object_property_set_bool(OBJECT(&vms->lua), "match",
 								vms->cfg.match, &error_abort);
 
+	if (vms->cfg.bootstrap)
+		object_property_set_uint(OBJECT(&vms->lua), "bootstrap",
+								vms->cfg.bootstrap, &error_abort);
+
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->lua), &error_fatal);
 
 	create_fdt(vms);
@@ -721,6 +743,9 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 					lua_virt_set_download);
 	object_class_property_add_bool(oc, "match", NULL,
 					lua_virt_set_match);
+	object_class_property_add(oc, "bootstrap", "uint32",
+		NULL, lua_virt_set_bootstrap,
+		NULL, NULL);
 }
 
 static void lua_virt_mach_finalize(Object *obj)

@@ -259,6 +259,8 @@ struct LagunaSoC {
 		char *nor_flash;
 		/* UART 0...5 <--> chrdev serial 0...5 */
 		bool match;
+		/* bootstrap PIN */
+		uint32_t bootstrap;
 	} cfg;
 };
 

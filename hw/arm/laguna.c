@@ -727,6 +727,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 
 	create_bootmode(s);
 	create_download(s);
+	create_bootstrap(s);
 }
 
 static Property lua_soc_properties[] = {
@@ -738,6 +739,7 @@ static Property lua_soc_properties[] = {
 	DEFINE_PROP_STRING("nor-flash", LagunaSoC, cfg.nor_flash),
 	DEFINE_PROP_BOOL("download", LagunaSoC, cfg.download, false),
 	DEFINE_PROP_BOOL("match", LagunaSoC, cfg.match, false),
+	DEFINE_PROP_UINT32("bootstrap", LagunaSoC, cfg.bootstrap, 0),
 	DEFINE_PROP_END_OF_LIST()
 };
 
