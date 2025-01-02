@@ -679,6 +679,18 @@ static void create_bootstrap(LagunaSoC *s)
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
 }
 
+static void create_downloadif(LagunaSoC *s)
+{
+	DeviceState *dev;
+
+	dev = qdev_new("laguna.downif");
+
+	qdev_prop_set_uint32(dev, "downif", s->cfg.downif);
+	sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x00601224);
+
+	sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+}
+
 static void create_bootmode(LagunaSoC *s)
 {
 	int i;
@@ -728,6 +740,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_bootmode(s);
 	create_download(s);
 	create_bootstrap(s);
+	create_downloadif(s);
 }
 
 static Property lua_soc_properties[] = {
@@ -740,6 +753,7 @@ static Property lua_soc_properties[] = {
 	DEFINE_PROP_BOOL("download", LagunaSoC, cfg.download, false),
 	DEFINE_PROP_BOOL("match", LagunaSoC, cfg.match, false),
 	DEFINE_PROP_UINT32("bootstrap", LagunaSoC, cfg.bootstrap, 0),
+		DEFINE_PROP_UINT32("downif", LagunaSoC, cfg.downif, 0),
 	DEFINE_PROP_END_OF_LIST()
 };
 

@@ -261,6 +261,7 @@ struct LagunaSoC {
 		bool match;
 		/* bootstrap PIN */
 		uint32_t bootstrap;
+		uint32_t downif;
 	} cfg;
 };
 

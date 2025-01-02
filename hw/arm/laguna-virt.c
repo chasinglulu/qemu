@@ -56,6 +56,7 @@ struct LagunaVirt {
 		uint8_t part_config;
 		uint8_t bootmode;
 		uint32_t bootstrap;
+		uint32_t downif;
 		const char *nor_flash;
 		const char *nand;
 		bool download;
@@ -106,6 +107,23 @@ static void lua_virt_set_bootstrap(Object *obj, Visitor *v,
 	}
 
 	s->cfg.bootstrap = value;
+}
+
+static void lua_virt_set_downif(Object *obj, Visitor *v,
+						const char *name, void *opaque,
+						Error **errp)
+{
+	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
+	Error *error = NULL;
+	uint32_t value;
+
+	visit_type_uint32(v, name, &value, &error);
+	if (error) {
+		error_propagate(errp, error);
+		return;
+	}
+
+	s->cfg.downif = value;
 }
 
 static void lua_virt_set_part_config(Object *obj, Visitor *v,
@@ -668,6 +686,10 @@ static void lua_virt_mach_init(MachineState *machine)
 		object_property_set_uint(OBJECT(&vms->lua), "bootstrap",
 								vms->cfg.bootstrap, &error_abort);
 
+	if (vms->cfg.downif)
+		object_property_set_uint(OBJECT(&vms->lua), "downif",
+								vms->cfg.downif, &error_abort);
+
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->lua), &error_fatal);
 
 	create_fdt(vms);
@@ -745,6 +767,9 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 					lua_virt_set_match);
 	object_class_property_add(oc, "bootstrap", "uint32",
 		NULL, lua_virt_set_bootstrap,
+		NULL, NULL);
+	object_class_property_add(oc, "downif", "uint32",
+		NULL, lua_virt_set_downif,
 		NULL, NULL);
 }
 
