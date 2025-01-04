@@ -553,6 +553,69 @@ static void create_usb(LagunaSoC *s)
                             qdev_get_gpio_in(gicdev, irq));
 }
 
+/* Cadence SDHCI capabilities register */
+#define SDHCI_CAPABILITIES  0x70156ac800UL
+static void create_cdns_sdhci(LagunaSoC *s)
+{
+	MemoryRegion *sysmem = get_system_memory();
+	int irq = apu_irqmap[VIRT_EMMC];
+	hwaddr base = base_memmap[VIRT_EMMC].base;
+	hwaddr size = base_memmap[VIRT_EMMC].size;
+	DeviceState *gicdev = DEVICE(&s->apu.gic);
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(s->apu.peri.cdns_mmc); i++) {
+		DeviceState *dev;
+		MemoryRegion *mr;
+		irq += i * 2;
+
+		object_initialize_child(OBJECT(s), "cdns-sdhci[*]", &s->apu.peri.cdns_mmc[i],
+								TYPE_CADENCE_SDHCI);
+		dev = DEVICE(&s->apu.peri.cdns_mmc[i]);
+		dev->id = g_strdup_printf("cdns-sdhci%d", i);
+		object_property_set_uint(OBJECT(dev), "index", i,
+									&error_fatal);
+		object_property_set_uint(OBJECT(dev), "capareg", SDHCI_CAPABILITIES,
+									&error_fatal);
+
+		sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+
+		mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0);
+		memory_region_add_subregion(sysmem,
+									base + i * size, mr);
+
+		sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(gicdev, irq));
+	}
+}
+
+static void create_cnds_emmc_card(LagunaSoC *s, CadenceSDHCIState *cdns, int index)
+{
+	DriveInfo *di = drive_get(IF_EMMC, 0, index);
+	BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+	DeviceState *emmc;
+
+	emmc = qdev_new(TYPE_EMMC);
+	emmc->id = g_strdup_printf("cnds-emmc%d", index);
+	object_property_add_child(OBJECT(cdns), "cdns-emmc[*]", OBJECT(emmc));
+	object_property_set_uint(OBJECT(emmc), "spec_version", 3, &error_fatal);
+	object_property_set_uint(OBJECT(emmc), "boot-config", s->cfg.part_config, &error_fatal);
+	qdev_prop_set_drive_err(emmc, "drive", blk, &error_fatal);
+	qdev_realize_and_unref(emmc, cdns->bus, &error_fatal);
+}
+
+static void create_cnds_sd_card(CadenceSDHCIState *cdns, int index)
+{
+	DriveInfo *di = drive_get(IF_SD, 0, index);
+	BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+	DeviceState *card;
+
+	card = qdev_new(TYPE_SD_CARD);
+	card->id = g_strdup_printf("cnds-sd%d", index);
+	object_property_add_child(OBJECT(cdns), "cnds-card[*]", OBJECT(card));
+	qdev_prop_set_drive_err(card, "drive", blk, &error_fatal);
+	qdev_realize_and_unref(card, cdns->bus, &error_fatal);
+}
+
 static void create_emmc(LagunaSoC *s)
 {
 	MemoryRegion *sysmem = get_system_memory();
@@ -722,19 +785,32 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_uart(s);
 	create_ethernet(s);
 	create_usb(s);
-	create_emmc(s);
 	create_ospi_flash(s);
 	create_qspi_flash(s);
 	create_ddr_memmap(s);
 	create_unimp(s);
 
+	if (s->cfg.cdns)
+		create_cdns_sdhci(s);
+	else
+		create_emmc(s);
 
-	if (s->cfg.has_emmc)
-		create_emmc_card(s, &s->apu.peri.mmc[0], 0);
+	if (s->cfg.has_emmc) {
+		if (s->cfg.cdns)
+			create_cnds_emmc_card(s, &s->apu.peri.cdns_mmc[0], 0);
+		else
+			create_emmc_card(s, &s->apu.peri.mmc[0], 0);
+	}
 
 	i = s->cfg.has_emmc ? 1 : 0;
-	for (; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
-		create_sd_card(&s->apu.peri.mmc[i], s->cfg.has_emmc ? (i - 1) : i);
+	if (s->cfg.cdns) {
+		for (; i < ARRAY_SIZE(s->apu.peri.cdns_mmc); i++) {
+			create_cnds_sd_card(&s->apu.peri.cdns_mmc[i], s->cfg.has_emmc ? (i - 1) : i);
+		}
+	} else {
+		for (; i < ARRAY_SIZE(s->apu.peri.mmc); i++) {
+			create_sd_card(&s->apu.peri.mmc[i], s->cfg.has_emmc ? (i - 1) : i);
+		}
 	}
 
 	create_bootmode(s);
@@ -753,7 +829,8 @@ static Property lua_soc_properties[] = {
 	DEFINE_PROP_BOOL("download", LagunaSoC, cfg.download, false),
 	DEFINE_PROP_BOOL("match", LagunaSoC, cfg.match, false),
 	DEFINE_PROP_UINT32("bootstrap", LagunaSoC, cfg.bootstrap, 0),
-		DEFINE_PROP_UINT32("downif", LagunaSoC, cfg.downif, 0),
+	DEFINE_PROP_UINT32("downif", LagunaSoC, cfg.downif, 0),
+	DEFINE_PROP_BOOL("cdns", LagunaSoC, cfg.cdns, false),
 	DEFINE_PROP_END_OF_LIST()
 };
 

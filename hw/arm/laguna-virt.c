@@ -61,6 +61,7 @@ struct LagunaVirt {
 		const char *nand;
 		bool download;
 		bool match;
+		bool cdns;
 	} cfg;
 };
 
@@ -90,6 +91,13 @@ static void lua_virt_set_match(Object *obj, bool value, Error **errp)
 	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
 
 	s->cfg.match = value;
+}
+
+static void lua_virt_set_cdns(Object *obj, bool value, Error **errp)
+{
+	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
+
+	s->cfg.cdns = value;
 }
 
 static void lua_virt_set_bootstrap(Object *obj, Visitor *v,
@@ -690,6 +698,10 @@ static void lua_virt_mach_init(MachineState *machine)
 		object_property_set_uint(OBJECT(&vms->lua), "downif",
 								vms->cfg.downif, &error_abort);
 
+	if (vms->cfg.cdns)
+		object_property_set_bool(OBJECT(&vms->lua), "cdns",
+								vms->cfg.cdns, &error_abort);
+
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(&vms->lua), &error_fatal);
 
 	create_fdt(vms);
@@ -771,6 +783,8 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 	object_class_property_add(oc, "downif", "uint32",
 		NULL, lua_virt_set_downif,
 		NULL, NULL);
+	object_class_property_add_bool(oc, "cdns", NULL,
+					lua_virt_set_cdns);
 }
 
 static void lua_virt_mach_finalize(Object *obj)

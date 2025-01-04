@@ -31,6 +31,7 @@
 #include "exec/hwaddr.h"
 #include "target/arm/cpu.h"
 #include "hw/sd/sdhci.h"
+#include "hw/sd/cadence_sdhci.h"
 #include "hw/ssi/designware_spi.h"
 #include "hw/gpio/dwapb_gpio.h"
 #include "hw/net/dwc_eth_qos.h"
@@ -218,6 +219,7 @@ struct LagunaSoC {
 		struct {
 			DWCUARTState uarts[LUA_SOC_NR_APU_UARTS];
 			SDHCIState mmc[LUA_SOC_NR_SDHCI];
+			CadenceSDHCIState cdns_mmc[LUA_SOC_NR_SDHCI];
 			DWSPIState ospi[LUA_SOC_NR_OSPI];
 			DWSPIState qspi[LUA_SOC_NR_QSPI];
 			DWAPBGPIOState gpios[LUA_SOC_NR_GPIO];
@@ -261,7 +263,10 @@ struct LagunaSoC {
 		bool match;
 		/* bootstrap PIN */
 		uint32_t bootstrap;
+		/* download interface selector */
 		uint32_t downif;
+		/* Cadence VIP */
+		bool cdns;
 	} cfg;
 };
 
