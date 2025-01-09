@@ -696,6 +696,8 @@ static void load_page(SPINANDFlashState *s, int row)
 	uint32_t block, page;
 	uint64_t offset, oob_off;
 
+	trace_tc58cxg_load_page_raw(row, s->block_shift, s->block_size, s->lun_shift, s->page_size);
+
 	block = (row >> s->block_shift) & blk_addr_mask;
 	page = row & page_addr_mask;
 	offset = block * s->block_size + page * s->page_size;
@@ -761,10 +763,10 @@ static void complete_collecting_data(SPINANDFlashState *s)
 		s->cur_addr |= s->data[i];
 	}
 
-	if (s->cur_addr < s->page_size)
-		s->cur_addr &= s->page_size - 1;
-	else
-		s->cur_addr &= s->page_size + s->oob_size - 1;
+	// if (s->cur_addr < s->page_size)
+	// 	s->cur_addr &= s->page_size - 1;
+	// else if (s->cur_addr < s->page_size + s->oob_size)
+	// 	s->cur_addr &= s->page_size + s->oob_size - 1;
 
 	s->state = STATE_IDLE;
 
@@ -847,12 +849,22 @@ static uint32_t tc58cxg_transfer8(SSIPeripheral *ss, uint32_t tx)
 		break;
 
 	case STATE_READ:
+		if (s->cur_addr < s->page_size)
+			s->cur_addr &= s->page_size - 1;
+		else if (s->cur_addr < s->page_size + s->oob_size)
+			s->cur_addr &= s->page_size + s->oob_size - 1;
+		else
+			break;
+
 		r = s->cache[s->cur_addr];
 		trace_tc58cxg_read_byte(s, s->cur_addr, (uint8_t)r);
-		if (s->cur_addr < s->page_size)
-			s->cur_addr = (s->cur_addr + 1) & (s->page_size - 1);
-		else
-			s->cur_addr = (s->cur_addr + 1) & (s->page_size + s->oob_size - 1);
+
+		s->cur_addr++;
+
+		// if (s->cur_addr < s->page_size)
+		// 	s->cur_addr = (s->cur_addr + 1) & (s->page_size - 1);
+		// else
+		// 	s->cur_addr = (s->cur_addr + 1) & (s->page_size + s->oob_size - 1);
 		break;
 
 	case STATE_COLLECTING_DATA:

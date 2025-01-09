@@ -94,6 +94,7 @@ tc58cxg_populated_jedec(void *s) "[%p] populated jedec code"
 tc58cxg_chip_erase(void *s) "[%p] chip erase"
 tc58cxg_select(void *s, const char *what) "[%p] %sselect"
 tc58cxg_page_program(void *s, uint32_t addr, uint8_t tx) "[%p] page program cur_addr=0x%"PRIx32" data=0x%"PRIx8
+tc58cxg_load_page_raw(int row, int block_shift, int block_size, int lun_shift, int page_size) "row=0x%"PRIx32" block_shift=0x%"PRIx32" block_size=0x%"PRIx32" lun_shift=0x%"PRIx32 " page_size=0x%"PRIx32
 tc58cxg_load_page(void *s, uint32_t blk, uint32_t page, uint64_t offset, uint64_t oob_off) "[%p] page load block=0x%"PRIx32" page=0x%"PRIx32" offset=0x%"PRIx64" oob offset=0x%"PRIx64
 tc58cxg_flash_write(void *s, uint32_t blk, uint32_t page, uint64_t offset, uint64_t oob_off) "[%p] flash write block=0x%"PRIx32" page=0x%"PRIx32" offset=0x%"PRIx64" oob offset=0x%"PRIx64
 tc58cxg_transfer(void *s, uint8_t state, uint32_t len, uint8_t needed, uint32_t pos, uint32_t cur_addr, uint8_t t) "[%p] Transfer state 0x%"PRIx8" len 0x%"PRIx32" needed 0x%"PRIx8" pos 0x%"PRIx32" addr 0x%"PRIx32" tx 0x%"PRIx8
