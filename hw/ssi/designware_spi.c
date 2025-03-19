@@ -146,7 +146,7 @@ static void designware_spi_update_irq(DWSPIState *s)
 	}
 
 	if (fifo32_is_full(&s->tx_fifo)) {
-		s->regs[R_RIS] |= RISR_TX_OVERFLOW_INT;
+		// s->regs[R_RIS] |= RISR_TX_OVERFLOW_INT;
 	} else {
 		s->regs[R_RIS] &= RISR_TX_OVERFLOW_INT;
 	}
@@ -158,13 +158,13 @@ static void designware_spi_update_irq(DWSPIState *s)
 	}
 
 	if (fifo32_is_full(&s->rx_fifo)) {
-		s->regs[R_RIS] |= RISR_RX_OVERFLOW_INT;
+		// s->regs[R_RIS] |= RISR_RX_OVERFLOW_INT;
 	} else {
 		s->regs[R_RIS] &= ~RISR_RX_OVERFLOW_INT;
 	}
 
 	if (fifo32_is_empty(&s->rx_fifo)) {
-		s->regs[R_RIS] |= RISR_RX_UNDERFLOW_INT;
+		// s->regs[R_RIS] |= RISR_RX_UNDERFLOW_INT;
 	} else {
 		s->regs[R_RIS] &= ~RISR_RX_UNDERFLOW_INT;
 	}
