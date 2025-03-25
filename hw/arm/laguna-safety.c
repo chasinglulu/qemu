@@ -323,8 +323,7 @@ static void create_qspi_nor_flash(LagunaSafety *s)
 	const int flash_num = 1;
 	char *name = g_strdup_printf("qspi");
 
-	object_initialize_child(OBJECT(s), name, &s->mpu.peri.qspi,
-							TYPE_DESIGNWARE_SPI);
+	object_initialize_child(OBJECT(s), name, &s->mpu.peri.qspi, TYPE_DWC_SPI);
 	dev = DEVICE(&s->mpu.peri.qspi);
 	qdev_prop_set_uint32(dev, "num-cs", flash_num);
 	qdev_prop_set_uint32(dev, "len-flash-dev", flash_num);
@@ -379,8 +378,7 @@ static void create_ospi_nor_nand_flash(LagunaSafety *s)
 	int j;
 	char *name = g_strdup_printf("ospi0");
 
-	object_initialize_child(OBJECT(s), name, &s->mpu.peri.ospi,
-							TYPE_DESIGNWARE_SPI);
+	object_initialize_child(OBJECT(s), name, &s->mpu.peri.ospi, TYPE_DWC_SPI);
 	dev = DEVICE(&s->mpu.peri.ospi);
 	qdev_prop_set_uint32(dev, "num-cs", flash_num);
 	qdev_prop_set_uint32(dev, "len-flash-dev", flash_num);

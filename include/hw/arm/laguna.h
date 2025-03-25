@@ -307,8 +307,8 @@ struct LagunaSoC {
 			DWCUARTState uarts[LUA_SOC_NR_APU_UARTS];
 			SDHCIState mmc[LUA_SOC_NR_SDHCI];
 			CadenceSDHCIState cdns_mmc[LUA_SOC_NR_SDHCI];
-			DWSPIState ospi[LUA_SOC_NR_OSPI];
-			DWSPIState qspi[LUA_SOC_NR_QSPI];
+			DWCSPIState ospi[LUA_SOC_NR_OSPI];
+			DWCSPIState qspi[LUA_SOC_NR_QSPI];
 			DWAPBGPIOState gpios[LUA_SOC_NR_GPIO];
 			DesignwareEtherQoSState eqos;
 			USBDWC3 usb;

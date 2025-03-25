@@ -16,21 +16,21 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HW_DESIGNWARE_SPI_H
-#define HW_DESIGNWARE_SPI_H
+#ifndef HW_DWC_SPI_H
+#define HW_DWC_SPI_H
 #include "qemu/fifo32.h"
 
-#define DESIGNWARE_SPI_REG_NUM  (0x100 / 4)
+#define DWC_SPI_REG_NUM  (0x100 / 4)
 
-#define TYPE_DESIGNWARE_SPI "designware.spi"
-#define DESIGNWARE_SPI(obj) OBJECT_CHECK(DWSPIState, (obj), TYPE_DESIGNWARE_SPI)
+#define TYPE_DWC_SPI "designware.spi"
+#define DWC_SPI(obj) OBJECT_CHECK(DWCSPIState, (obj), TYPE_DWC_SPI)
 
-typedef struct DWSPIState {
+typedef struct DWCSPIState {
 	SysBusDevice parent_obj;
 	uint64_t *flash_dev;
 	uint32_t flash_dev_num;
-
 	MemoryRegion mmio;
+	QEMUTimer *transfer_timer;
 	qemu_irq irq;
 
 	uint32_t num_cs;
@@ -43,7 +43,7 @@ typedef struct DWSPIState {
 	Fifo32 tx_fifo;
 	Fifo32 rx_fifo;
 
-	uint32_t regs[DESIGNWARE_SPI_REG_NUM];
-} DWSPIState;
+	uint32_t regs[DWC_SPI_REG_NUM];
+} DWCSPIState;
 
-#endif /* HW_DESIGNWARE_SPI_H */
+#endif /* HW_DWC_SPI_H */

@@ -115,8 +115,8 @@ struct LagunaSafety {
 			CadenceTTCState ttc[LUA_SAFETY_NR_TIMER];
 			SDHCIState mmc[LUA_SAFETY_NR_SDHCI];
 			DesignwareEtherQoSState eqos;
-			DWSPIState qspi;
-			DWSPIState ospi;
+			DWCSPIState qspi;
+			DWCSPIState ospi;
 		} peri;
 
 		ARMCPU cpus[LUA_SAFETY_NR_MCPUS];

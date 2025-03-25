@@ -23,6 +23,7 @@
 #include "hw/ssi/ssi.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
+#include "qemu/timer.h"
 #include "hw/ssi/designware_spi.h"
 #include "qapi/error.h"
 #include "trace.h"
@@ -79,7 +80,7 @@
 static uint8_t ssi_op_len;
 static uint32_t need_wait_cycle;
 
-static uint8_t get_flash_dummy_cycles(DWSPIState *s)
+static uint8_t get_flash_dummy_cycles(DWCSPIState *s)
 {
 	int64_t needed_bytes = 0;
 	DeviceState *flash_dev = NULL;
@@ -98,7 +99,7 @@ static uint8_t get_flash_dummy_cycles(DWSPIState *s)
 	return needed_bytes;
 }
 
-static void designware_spi_txfifo_reset(DWSPIState *s)
+static void dwc_spi_txfifo_reset(DWCSPIState *s)
 {
 	fifo32_reset(&s->tx_fifo);
 
@@ -107,7 +108,7 @@ static void designware_spi_txfifo_reset(DWSPIState *s)
 	s->regs[R_TXFL] = 0;
 }
 
-static void designware_spi_rxfifo_reset(DWSPIState *s)
+static void dwc_spi_rxfifo_reset(DWCSPIState *s)
 {
 	fifo32_reset(&s->rx_fifo);
 
@@ -116,7 +117,13 @@ static void designware_spi_rxfifo_reset(DWSPIState *s)
 	s->regs[R_RXFL] = 0;
 }
 
-static void designware_spi_update_cs(DWSPIState *s)
+/* Perform data transfer according to controller configuration */
+static void dwc_spi_data_transfer(void *opaque)
+{
+
+}
+
+static void dwc_spi_update_cs(DWCSPIState *s)
 {
 	int i;
 
@@ -135,39 +142,39 @@ static void designware_spi_update_cs(DWSPIState *s)
 	                    __func__, need_wait_cycle, s->regs[R_SE]);
 }
 
-static void designware_spi_update_irq(DWSPIState *s)
+static void dwc_spi_update_irq(DWCSPIState *s)
 {
 	int level;
 
-	if (fifo32_num_used(&s->tx_fifo) <= (s->regs[R_TXFTL] & TXFTLR_TFT_MASK)) {
-		s->regs[R_RIS] |= RISR_TX_EMPTY_INT;
-	} else {
-		s->regs[R_RIS] &= ~RISR_TX_EMPTY_INT;
-	}
+	// if (fifo32_num_used(&s->tx_fifo) <= (s->regs[R_TXFTL] & TXFTLR_TFT_MASK)) {
+	// 	s->regs[R_RIS] |= RISR_TX_EMPTY_INT;
+	// } else {
+	// 	s->regs[R_RIS] &= ~RISR_TX_EMPTY_INT;
+	// }
 
-	if (fifo32_is_full(&s->tx_fifo)) {
-		// s->regs[R_RIS] |= RISR_TX_OVERFLOW_INT;
-	} else {
-		s->regs[R_RIS] &= RISR_TX_OVERFLOW_INT;
-	}
+	// if (fifo32_is_full(&s->tx_fifo)) {
+	// 	s->regs[R_RIS] |= RISR_TX_OVERFLOW_INT;
+	// } else {
+	// 	s->regs[R_RIS] &= RISR_TX_OVERFLOW_INT;
+	// }
 
-	if (fifo32_num_used(&s->rx_fifo) >= (s->regs[R_RXFTL] & RXFTLR_RFT_MASK) + 1) {
-		s->regs[R_RIS] |= RISR_RX_FULL_INT;
-	} else {
-		s->regs[R_RIS] &= ~RISR_RX_FULL_INT;
-	}
+	// if (fifo32_num_used(&s->rx_fifo) >= (s->regs[R_RXFTL] & RXFTLR_RFT_MASK) + 1) {
+	// 	s->regs[R_RIS] |= RISR_RX_FULL_INT;
+	// } else {
+	// 	s->regs[R_RIS] &= ~RISR_RX_FULL_INT;
+	// }
 
-	if (fifo32_is_full(&s->rx_fifo)) {
-		// s->regs[R_RIS] |= RISR_RX_OVERFLOW_INT;
-	} else {
-		s->regs[R_RIS] &= ~RISR_RX_OVERFLOW_INT;
-	}
+	// if (fifo32_is_full(&s->rx_fifo)) {
+	// 	s->regs[R_RIS] |= RISR_RX_OVERFLOW_INT;
+	// } else {
+	// 	s->regs[R_RIS] &= ~RISR_RX_OVERFLOW_INT;
+	// }
 
-	if (fifo32_is_empty(&s->rx_fifo)) {
-		// s->regs[R_RIS] |= RISR_RX_UNDERFLOW_INT;
-	} else {
-		s->regs[R_RIS] &= ~RISR_RX_UNDERFLOW_INT;
-	}
+	// if (fifo32_is_empty(&s->rx_fifo)) {
+	// 	s->regs[R_RIS] |= RISR_RX_UNDERFLOW_INT;
+	// } else {
+	// 	s->regs[R_RIS] &= ~RISR_RX_UNDERFLOW_INT;
+	// }
 
 	s->regs[R_IS] = s->regs[R_RIS] & s->regs[R_IM];
 
@@ -175,23 +182,23 @@ static void designware_spi_update_irq(DWSPIState *s)
 	qemu_set_irq(s->irq, level);
 }
 
-static void designware_spi_reset(DeviceState *d)
+static void dwc_spi_reset(DeviceState *d)
 {
-	DWSPIState *s = DESIGNWARE_SPI(d);
+	DWCSPIState *s = DWC_SPI(d);
 
 	memset(s->regs, 0, sizeof(s->regs));
 
 	s->regs[R_VID] = 0x3130322a;
 	s->regs[R_IM] = IMR_MASK;
 
-	designware_spi_txfifo_reset(s);
-	designware_spi_rxfifo_reset(s);
+	dwc_spi_txfifo_reset(s);
+	dwc_spi_rxfifo_reset(s);
 
-	designware_spi_update_cs(s);
-	designware_spi_update_irq(s);
+	dwc_spi_update_cs(s);
+	dwc_spi_update_irq(s);
 }
 
-static void designware_spi_xfer(DWSPIState *s)
+static void dwc_spi_xfer(DWCSPIState *s)
 {
 	uint32_t tx;
 	uint32_t rx;
@@ -213,22 +220,22 @@ static void designware_spi_xfer(DWSPIState *s)
 			s->regs[R_STAT] |= SR_RF_NOT_EMPT;
 		} else {
 			s->regs[R_STAT] |= SR_RF_FULL;
-			designware_spi_update_irq(s);
+			dwc_spi_update_irq(s);
 		}
 	}
 
 	if (fifo32_is_empty(&s->tx_fifo)) {
 		s->regs[R_STAT] |= SR_TF_EMPT;
-		designware_spi_update_irq(s);
+		dwc_spi_update_irq(s);
 	}
 
 	if (fifo32_is_full(&s->rx_fifo)) {
 		s->regs[R_STAT] |= SR_RF_FULL;
-		designware_spi_update_irq(s);
+		dwc_spi_update_irq(s);
 	}
 }
 
-static void designware_spi_fill_rxfifo(DWSPIState *s)
+static void dwc_spi_fill_rxfifo(DWCSPIState *s)
 {
 	uint32_t rx;
 	uint32_t wait_cycles = get_flash_dummy_cycles(s);
@@ -264,11 +271,11 @@ static void designware_spi_fill_rxfifo(DWSPIState *s)
 
 	if (fifo32_is_full(&s->rx_fifo)) {
 		s->regs[R_STAT] |= SR_RF_FULL;
-		designware_spi_update_irq(s);
+		dwc_spi_update_irq(s);
 	}
 }
 
-static void designware_spi_flush_txfifo(DWSPIState *s)
+static void dwc_spi_flush_txfifo(DWCSPIState *s)
 {
 	uint32_t tx;
 
@@ -286,11 +293,11 @@ static void designware_spi_flush_txfifo(DWSPIState *s)
 
 	if (fifo32_is_empty(&s->tx_fifo)) {
 		s->regs[R_STAT] |= SR_TF_EMPT;
-		designware_spi_update_irq(s);
+		dwc_spi_update_irq(s);
 	}
 }
 
-static bool designware_spi_is_bad_reg(hwaddr addr, bool allow_reserved)
+static bool dwc_spi_is_bad_reg(hwaddr addr, bool allow_reserved)
 {
 	bool bad;
 
@@ -308,19 +315,29 @@ static bool designware_spi_is_bad_reg(hwaddr addr, bool allow_reserved)
 		bad = false;
 	}
 
-	if (addr >= (DESIGNWARE_SPI_REG_NUM << 2)) {
+	if (addr >= (DWC_SPI_REG_NUM << 2)) {
 		bad = true;
 	}
 
 	return bad;
 }
 
-static uint64_t designware_spi_read(void *opaque, hwaddr addr, unsigned int size)
+static void dwc_spi_resume_pending_transfer(DWCSPIState *s)
 {
-	DWSPIState *s = opaque;
+	timer_del(s->transfer_timer);
+	dwc_spi_data_transfer(s);
+}
+
+static uint64_t dwc_spi_read(void *opaque, hwaddr addr, unsigned int size)
+{
+	DWCSPIState *s = opaque;
 	uint32_t r;
 
-	if (designware_spi_is_bad_reg(addr, true)) {
+	if (timer_pending(s->transfer_timer)) {
+		dwc_spi_resume_pending_transfer(s);
+	}
+
+	if (dwc_spi_is_bad_reg(addr, true)) {
 		qemu_log_mask(LOG_GUEST_ERROR, "%s: bad read at address 0x%"
 						HWADDR_PRIx "\n", __func__, addr);
 		return 0;
@@ -331,7 +348,7 @@ static uint64_t designware_spi_read(void *opaque, hwaddr addr, unsigned int size
 	case R_DATA:
 		if (fifo32_is_empty(&s->rx_fifo)) {
 			qemu_log_mask(LOG_GUEST_ERROR, "%s: rx fifo empty\n", __func__);
-			return -1;
+			return -EINVAL;
 		}
 
 		s->regs[R_STAT] |= SR_RF_NOT_EMPT;
@@ -345,7 +362,7 @@ static uint64_t designware_spi_read(void *opaque, hwaddr addr, unsigned int size
 		break;
 	case R_RXFL:
 		if (!s->regs[R_RXFL] && s->regs[R_CTRL1])
-			designware_spi_fill_rxfifo(s);
+			dwc_spi_fill_rxfifo(s);
 
 		r = s->regs[addr];
 		break;
@@ -354,21 +371,25 @@ static uint64_t designware_spi_read(void *opaque, hwaddr addr, unsigned int size
 		break;
 	}
 
-	designware_spi_update_irq(s);
+	dwc_spi_update_irq(s);
 
-	trace_designware_spi_read(addr << 2, size, r);
+	trace_dwc_spi_read(addr << 2, size, r);
 	return r;
 }
 
-static void designware_spi_write(void *opaque, hwaddr addr,
+static void dwc_spi_write(void *opaque, hwaddr addr,
                              uint64_t val64, unsigned int size)
 {
-	DWSPIState *s = opaque;
+	DWCSPIState *s = opaque;
 	uint32_t value = val64;
 
-	trace_designware_spi_write(addr, val64, size);
+	if (timer_pending(s->transfer_timer)) {
+		dwc_spi_resume_pending_transfer(s);
+	}
 
-	if (designware_spi_is_bad_reg(addr, false)) {
+	trace_dwc_spi_write(addr, val64, size);
+
+	if (dwc_spi_is_bad_reg(addr, false)) {
 		qemu_log_mask(LOG_GUEST_ERROR, "%s: bad write at addr=0x%"
 						HWADDR_PRIx " value=0x%x\n", __func__, addr, value);
 		return;
@@ -389,8 +410,8 @@ static void designware_spi_write(void *opaque, hwaddr addr,
 
 	case R_SSIEN:
 		if (!(value & BIT(0))) {
-			designware_spi_txfifo_reset(s);
-			designware_spi_rxfifo_reset(s);
+			dwc_spi_txfifo_reset(s);
+			dwc_spi_rxfifo_reset(s);
 		}
 		s->regs[R_SSIEN] = value;
 		break;
@@ -406,15 +427,15 @@ static void designware_spi_write(void *opaque, hwaddr addr,
 						"can not write to SER when SSI enabled and busy.\n");
 			} else {
 				s->regs[R_SE] = value;
-				designware_spi_update_cs(s);
+				dwc_spi_update_cs(s);
 
 				if (s->regs[R_CTRL1] > 0 && !!value)
-					designware_spi_flush_txfifo(s);
+					dwc_spi_flush_txfifo(s);
 
 				if (fifo32_num_used(&s->tx_fifo) >=
 					(s->regs[R_TXFTL] & TXFTLR_TXFTHR_MASK) >> TXFTLR_TXFTHR_OFFSET
 					&& !s->regs[R_CTRL1] && !!value)
-						designware_spi_xfer(s);
+						dwc_spi_xfer(s);
 			}
 		}
 		break;
@@ -436,7 +457,7 @@ static void designware_spi_write(void *opaque, hwaddr addr,
 		if (fifo32_num_used(&s->tx_fifo) >=
 			(s->regs[R_TXFTL] & TXFTLR_TXFTHR_MASK) >> TXFTLR_TXFTHR_OFFSET
 			&& !s->regs[R_CTRL1] && !!s->regs[R_SE])
-				designware_spi_flush_txfifo(s);
+				dwc_spi_flush_txfifo(s);
 
 		break;
 
@@ -463,12 +484,12 @@ static void designware_spi_write(void *opaque, hwaddr addr,
 		break;
 	}
 
-	designware_spi_update_irq(s);
+	dwc_spi_update_irq(s);
 }
 
-static const MemoryRegionOps designware_spi_ops = {
-	.read = designware_spi_read,
-	.write = designware_spi_write,
+static const MemoryRegionOps dwc_spi_ops = {
+	.read = dwc_spi_read,
+	.write = dwc_spi_write,
 	.endianness = DEVICE_LITTLE_ENDIAN,
 	.valid = {
 		.min_access_size = 4,
@@ -476,10 +497,10 @@ static const MemoryRegionOps designware_spi_ops = {
 	}
 };
 
-static void designware_spi_realize(DeviceState *dev, Error **errp)
+static void dwc_spi_realize(DeviceState *dev, Error **errp)
 {
 	SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
-	DWSPIState *s = DESIGNWARE_SPI(dev);
+	DWCSPIState *s = DWC_SPI(dev);
 	int i;
 
 	/* Up to 16 slave-select output pins available */
@@ -493,41 +514,59 @@ static void designware_spi_realize(DeviceState *dev, Error **errp)
 		sysbus_init_irq(sbd, &s->cs_lines[i]);
 	}
 
-	memory_region_init_io(&s->mmio, OBJECT(s), &designware_spi_ops, s,
-							TYPE_DESIGNWARE_SPI, 0x1000);
+	memory_region_init_io(&s->mmio, OBJECT(s), &dwc_spi_ops, s,
+							TYPE_DWC_SPI, 0x1000);
 	sysbus_init_mmio(sbd, &s->mmio);
 
 	fifo32_create(&s->tx_fifo, s->fifo_depth);
 	fifo32_create(&s->rx_fifo, s->fifo_depth);
 }
 
-static Property designware_spi_properties[] = {
-	DEFINE_PROP_UINT32("num-cs", DWSPIState, num_cs, 1),
-	DEFINE_PROP_UINT32("fifo-depth", DWSPIState, fifo_depth, 64),
-	DEFINE_PROP_ARRAY("flash-dev", DWSPIState, flash_dev_num,
+static Property dwc_spi_properties[] = {
+	DEFINE_PROP_UINT32("num-cs", DWCSPIState, num_cs, 1),
+	DEFINE_PROP_UINT32("fifo-depth", DWCSPIState, fifo_depth, 64),
+	DEFINE_PROP_ARRAY("flash-dev", DWCSPIState, flash_dev_num,
 	                            flash_dev, qdev_prop_uint64, uint64_t),
 	DEFINE_PROP_END_OF_LIST(),
 };
 
-static void designware_spi_class_init(ObjectClass *klass, void *data)
+static void dwc_spi_class_init(ObjectClass *klass, void *data)
 {
 	DeviceClass *dc = DEVICE_CLASS(klass);
 
-	device_class_set_props(dc, designware_spi_properties);
-	dc->reset = designware_spi_reset;
-	dc->realize = designware_spi_realize;
+	device_class_set_props(dc, dwc_spi_properties);
+	dc->reset = dwc_spi_reset;
+	dc->realize = dwc_spi_realize;
 }
 
-static const TypeInfo designware_spi_info = {
-	.name           = TYPE_DESIGNWARE_SPI,
-	.parent         = TYPE_SYS_BUS_DEVICE,
-	.instance_size  = sizeof(DWSPIState),
-	.class_init     = designware_spi_class_init,
+static void dwc_spi_init(Object *obj)
+{
+	DWCSPIState *s = DWC_SPI(obj);
+
+	s->transfer_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, dwc_spi_data_transfer, s);
+}
+
+static void dwc_spi_finalize(Object *obj)
+{
+	DWCSPIState *s = DWC_SPI(obj);
+
+	timer_free(s->transfer_timer);
+	fifo32_destroy(&s->tx_fifo);
+	fifo32_destroy(&s->rx_fifo);
+}
+
+static const TypeInfo dwc_spi_info = {
+	.name               = TYPE_DWC_SPI,
+	.parent             = TYPE_SYS_BUS_DEVICE,
+	.instance_init      = dwc_spi_init,
+	.instance_finalize  = dwc_spi_finalize,
+	.instance_size      = sizeof(DWCSPIState),
+	.class_init         = dwc_spi_class_init,
 };
 
-static void designware_spi_register_types(void)
+static void dwc_spi_register_types(void)
 {
-	type_register_static(&designware_spi_info);
+	type_register_static(&dwc_spi_info);
 }
 
-type_init(designware_spi_register_types)
+type_init(dwc_spi_register_types)

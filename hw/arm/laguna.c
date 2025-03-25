@@ -400,8 +400,7 @@ static void create_qspi_flash(LagunaSoC *s)
 		DeviceState *dev;
 		MemoryRegion *mr;
 
-		object_initialize_child(OBJECT(s), name, &s->apu.peri.qspi[i],
-								TYPE_DESIGNWARE_SPI);
+		object_initialize_child(OBJECT(s), name, &s->apu.peri.qspi[i], TYPE_DWC_SPI);
 		dev = DEVICE(&s->apu.peri.qspi[i]);
 		qdev_prop_set_uint32(dev, "num-cs", flash_num);
 		qdev_prop_set_uint32(dev, "len-flash-dev", flash_num);
@@ -461,8 +460,7 @@ static void create_ospi_flash(LagunaSoC *s)
 		DeviceState *dev;
 		MemoryRegion *mr;
 
-		object_initialize_child(OBJECT(s), name, &s->apu.peri.ospi[i],
-								TYPE_DESIGNWARE_SPI);
+		object_initialize_child(OBJECT(s), name, &s->apu.peri.ospi[i], TYPE_DWC_SPI);
 		dev = DEVICE(&s->apu.peri.ospi[i]);
 		qdev_prop_set_uint32(dev, "num-cs", flash_num);
 		qdev_prop_set_uint32(dev, "len-flash-dev", flash_num);
