@@ -749,7 +749,7 @@ static void create_downloadif(LagunaSoC *s)
 	dev = qdev_new("laguna.downif");
 
 	qdev_prop_set_uint32(dev, "downif", s->cfg.downif);
-	sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x00601224);
+	sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x006CF184);
 
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
 }
