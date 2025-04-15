@@ -47,14 +47,14 @@ static void lua_download_if_class_init(ObjectClass *klass, void *data)
 	dc->desc = "Laguna Download Interface";
 }
 
-static uint64_t lua_bootstarp_read(void *opaque, hwaddr offset, unsigned int size)
+static uint64_t lua_download_if_read(void *opaque, hwaddr offset, unsigned int size)
 {
 	LUADownloadIFState *s = LUA_DOWNIF(opaque);
 
 	return s->downif;
 }
 
-static void lua_bootstarp_write(void *opaque, hwaddr offset,
+static void lua_download_if_write(void *opaque, hwaddr offset,
                               uint64_t value, unsigned int size)
 {
 	LUADownloadIFState *s = LUA_DOWNIF(opaque);
@@ -62,9 +62,9 @@ static void lua_bootstarp_write(void *opaque, hwaddr offset,
 	s->downif = value;
 }
 
-static const MemoryRegionOps lua_bootstarp_ops = {
-	.read = lua_bootstarp_read,
-	.write = lua_bootstarp_write,
+static const MemoryRegionOps lua_download_if_ops = {
+	.read = lua_download_if_read,
+	.write = lua_download_if_write,
 	.endianness = DEVICE_LITTLE_ENDIAN,
 	.impl.min_access_size = 4,
 	.impl.max_access_size = 4,
@@ -74,7 +74,7 @@ static void lua_download_if_init(Object *obj)
 {
 	LUADownloadIFState *s = LUA_DOWNIF(obj);
 
-	memory_region_init_io(&s->mmio, obj, &lua_bootstarp_ops,
+	memory_region_init_io(&s->mmio, obj, &lua_download_if_ops,
 	              s, TYPE_LUA_DOWNIF, sizeof(uint32_t));
 	sysbus_init_mmio(SYS_BUS_DEVICE(s), &s->mmio);
 }
