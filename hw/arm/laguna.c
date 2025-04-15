@@ -773,6 +773,31 @@ static void create_download(LagunaSoC *s)
 	qdev_connect_gpio_out(DEVICE(s), 3, irq);
 }
 
+static inline void create_register_device(const char *name, RegEntry *entry)
+{
+	DeviceState *dev = qdev_new("laguna.register");
+
+	qdev_prop_set_string(dev, "name", name);
+	qdev_prop_set_uint32(dev, "default", entry->val);
+	sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+
+	sysbus_mmio_map_overlap(SYS_BUS_DEVICE(dev), 0, entry->addr, 0);
+}
+
+static void create_clock_reg(LagunaSoC *s)
+{
+	RegEntry *entry;
+	int i;
+	char *name;
+
+	entry = (void *)clk_rst_regs;
+	for (i = 0; i < ARRAY_SIZE(clk_rst_regs); i++, entry++) {
+		name = g_strdup_printf("reg_device@%08lx", entry->addr);
+		create_register_device(name, entry);
+		g_free(name);
+	}
+}
+
 static void lua_soc_realize(DeviceState *dev, Error **errp)
 {
 	LagunaSoC *s = LUA_SOC(dev);
@@ -817,6 +842,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_download(s);
 	create_bootstrap(s);
 	create_downloadif(s);
+	create_clock_reg(s);
 }
 
 static Property lua_soc_properties[] = {

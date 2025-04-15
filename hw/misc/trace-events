@@ -283,3 +283,7 @@ sigi_update_state(uint32_t cpu_idx, uint64_t entry) "cpu_idx 0x%" PRIx32 " entry
 # axera_a55_ctrl.c
 lua_core_ctrl_poweron(uint32_t cpu_idx, uint64_t entry, uint8_t target_el) "poweron: idx 0x%" PRIx32 " entry 0x%" PRIx64 " target_el %" PRIu32
 lua_core_ctrl_poweroff(uint32_t cpu_idx) "poweroff: idx 0x%" PRIx32
+
+#axera-register.c
+lua_register_write(uint64_t addr, uint32_t value) "write: address 0x%" PRIx64 " value 0x%" PRIx32
+lua_register_read(uint64_t addr, uint32_t value) "read: address 0x%" PRIx64 " value 0x%" PRIx32

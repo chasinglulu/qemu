@@ -23,6 +23,7 @@
 #include "qemu/module.h"
 #include "qemu/error-report.h"
 #include "qapi/error.h"
+#include "trace.h"
 
 struct LUARegisterState {
 	SysBusDevice parent_obj;
@@ -48,6 +49,8 @@ static uint64_t lua_register_read(void *opaque, hwaddr offset, unsigned int size
 {
 	LUARegisterState *s = LUA_REGISTER(opaque);
 
+	trace_lua_register_read(SYS_BUS_DEVICE(s)->mmio[0].addr, s->rstval);
+
 	return s->rstval;
 }
 
@@ -55,6 +58,8 @@ static void lua_register_write(void *opaque, hwaddr offset,
                               uint64_t value, unsigned int size)
 {
 	LUARegisterState *s = LUA_REGISTER(opaque);
+
+	trace_lua_register_write(SYS_BUS_DEVICE(s)->mmio[0].addr, (uint32_t)value);
 
 	s->rstval = value;
 }
