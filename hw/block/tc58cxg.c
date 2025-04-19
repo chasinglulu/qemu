@@ -438,7 +438,8 @@ static inline void flash_sync_area(SPINANDFlashState *s, int64_t off, int64_t le
 {
 	QEMUIOVector *iov;
 
-	if (!s->blk || !blk_is_writable(s->blk) || off > s->page_size) {
+	if (!s->blk || !blk_is_writable(s->blk) || off + len > s->size) {
+		qemu_log_mask(LOG_GUEST_ERROR, "Invalid arguments\n");
 		return;
 	}
 
