@@ -354,6 +354,8 @@ struct LagunaSoC {
 		uint32_t downif;
 		/* Cadence VIP */
 		bool cdns;
+		/* ocm memory backend */
+		char *ocm_memdev;
 	} cfg;
 };
 

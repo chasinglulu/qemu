@@ -57,6 +57,7 @@ struct LagunaVirt {
 		uint8_t bootmode;
 		uint32_t bootstrap;
 		uint32_t downif;
+		const char *ocm_memdev;
 		const char *nor_flash;
 		const char *nand;
 		bool download;
@@ -64,6 +65,13 @@ struct LagunaVirt {
 		bool cdns;
 	} cfg;
 };
+
+static void lua_virt_set_ocm_memdev(Object *obj, const char *str, Error **errp)
+{
+	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
+
+	s->cfg.ocm_memdev = g_strdup(str);
+}
 
 static void lua_virt_set_nor_flash(Object *obj, const char *str, Error **errp)
 {
@@ -678,6 +686,10 @@ static void lua_virt_mach_init(MachineState *machine)
 		object_property_set_bool(OBJECT(&vms->lua), "secure",
 								vms->cfg.secure, &error_abort);
 
+	if(vms->cfg.ocm_memdev)
+		object_property_set_str(OBJECT(&vms->lua), "ocm",
+								vms->cfg.ocm_memdev, &error_abort);
+
 	if(vms->cfg.nor_flash)
 		object_property_set_str(OBJECT(&vms->lua), "nor-flash",
 								vms->cfg.nor_flash, &error_abort);
@@ -785,6 +797,8 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 		NULL, NULL);
 	object_class_property_add_bool(oc, "cdns", NULL,
 					lua_virt_set_cdns);
+	object_class_property_add_str(oc, "ocm", NULL,
+					lua_virt_set_ocm_memdev);
 }
 
 static void lua_virt_mach_finalize(Object *obj)

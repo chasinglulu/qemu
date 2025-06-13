@@ -674,6 +674,45 @@ static void create_sd_card(SDHCIState *sd, int index)
 	qdev_realize_and_unref(card, BUS(&sd->sdbus), &error_fatal);
 }
 
+static void create_ocm_memmap(LagunaSoC *s)
+{
+	hwaddr ocm_base = base_memmap[VIRT_OCM_NPU].base;
+	hwaddr ocm_size = base_memmap[VIRT_OCM_NPU].size;
+	ram_addr_t backend_size;
+	Object *backend;
+	MemoryRegion *mr;
+
+	if (s->cfg.ocm_memdev) {
+		backend = object_resolve_path_type(s->cfg.ocm_memdev,
+							TYPE_MEMORY_BACKEND, NULL);
+		if (!backend) {
+			error_report("OCM memory backend '%s' not found", s->cfg.ocm_memdev);
+			exit(EXIT_FAILURE);
+		}
+
+		backend_size = object_property_get_uint(backend, "size",  &error_abort);
+		if (backend_size != ocm_size) {
+			error_report("ocm memory size does not match the size of the memory backend");
+			exit(EXIT_FAILURE);
+		}
+
+		mr = host_memory_backend_get_memory(MEMORY_BACKEND(backend));
+		if (host_memory_backend_is_mapped(MEMORY_BACKEND(backend))) {
+			error_report("memory backend %s can't be used multiple times.",
+							object_get_canonical_path_component(OBJECT(backend)));
+			exit(EXIT_FAILURE);
+		}
+		host_memory_backend_set_mapped(MEMORY_BACKEND(backend), true);
+		vmstate_register_ram_global(mr);
+
+		memory_region_init_alias(&s->mr_ocm, OBJECT(s), "ocm", mr, 0, ocm_size);
+	} else {
+		memory_region_init_ram(&s->mr_ocm, OBJECT(s), "ocm", ocm_size, &error_fatal);
+	}
+
+	memory_region_add_subregion(get_system_memory(), ocm_base, &s->mr_ocm);
+}
+
 /* This takes the board allocated linear DDR memory and creates aliases
  * for each split DDR range/aperture on the address map.
  */
@@ -683,8 +722,6 @@ static void create_ddr_memmap(LagunaSoC *s)
 	MemoryRegion *sysmem = get_system_memory();
 	hwaddr base = base_memmap[VIRT_MEM].base;
 	hwaddr size = base_memmap[VIRT_MEM].size;
-	hwaddr ocm_base = base_memmap[VIRT_OCM_NPU].base;
-	hwaddr ocm_size = base_memmap[VIRT_OCM_NPU].size;
 	hwaddr iram_base = base_memmap[VIRT_IRAM_SAFETY].base;
 	hwaddr iram_size = base_memmap[VIRT_IRAM_SAFETY].size;
 	hwaddr ocms_base = base_memmap[VIRT_OCM_SAFETY].base;
@@ -704,8 +741,8 @@ static void create_ddr_memmap(LagunaSoC *s)
 	memory_region_add_subregion(sysmem, base, &s->mr_ddr);
 	g_free(name);
 
-	memory_region_init_ram(&s->mr_ocm, OBJECT(s), "ocm", ocm_size, &error_fatal);
-	memory_region_add_subregion(sysmem, ocm_base, &s->mr_ocm);
+	/* Create the OCM memory map */
+	create_ocm_memmap(s);
 
 	memory_region_init_ram(&s->mr_iram_safety, OBJECT(s), "iram-safety", iram_size, &error_fatal);
 	memory_region_add_subregion(sysmem, iram_base, &s->mr_iram_safety);
@@ -855,6 +892,7 @@ static Property lua_soc_properties[] = {
 	DEFINE_PROP_UINT32("bootstrap", LagunaSoC, cfg.bootstrap, 0),
 	DEFINE_PROP_UINT32("downif", LagunaSoC, cfg.downif, 0),
 	DEFINE_PROP_BOOL("cdns", LagunaSoC, cfg.cdns, false),
+	DEFINE_PROP_STRING("ocm", LagunaSoC, cfg.ocm_memdev),
 	DEFINE_PROP_END_OF_LIST()
 };
 
