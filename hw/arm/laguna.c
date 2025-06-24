@@ -789,6 +789,18 @@ static void create_downloadif(LagunaSoC *s)
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
 }
 
+static void create_sysreset(LagunaSoC *s)
+{
+	DeviceState *dev;
+
+	dev = qdev_new("laguna.sysreset");
+
+	qdev_prop_set_uint32(dev, "sysreset", 0);
+	sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x006CF00C);
+
+	sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+}
+
 static void create_bootmode(LagunaSoC *s)
 {
 	int i;
@@ -878,6 +890,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_bootstrap(s);
 	create_downloadif(s);
 	create_clock_reg(s);
+	create_sysreset(s);
 }
 
 static Property lua_soc_properties[] = {

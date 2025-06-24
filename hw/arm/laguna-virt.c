@@ -29,6 +29,7 @@
 #include "hw/arm/laguna.h"
 #include "qom/object.h"
 #include "sysemu/sysemu.h"
+#include "sysemu/reset.h"
 #include "qemu/log.h"
 #include "qapi/visitor.h"
 
@@ -738,6 +739,12 @@ static void lua_virt_mach_init(MachineState *machine)
 	qemu_add_machine_init_done_notifier(&vms->machine_done);
 }
 
+static void lua_virt_mach_reset(MachineState *machine, ShutdownCause reason)
+{
+	/* Reset the Luaguna SoC */
+	qemu_devices_reset(reason);
+}
+
 static void lua_virt_mach_instance_init(Object *obj)
 {
 	LagunaVirt *vms = LAGUNA_VIRT_MACHINE(obj);
@@ -758,6 +765,7 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 	MachineClass *mc = MACHINE_CLASS(oc);
 
 	mc->desc = "Laguna SoC Virtual Platform";
+	mc->reset = lua_virt_mach_reset;
 	mc->init = lua_virt_mach_init;
 	mc->min_cpus = LUA_SOC_NR_ACPUS;
 	mc->max_cpus = LUA_SOC_NR_ACPUS;
