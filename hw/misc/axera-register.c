@@ -1,11 +1,3 @@
-/*
- * SPDX-License-Identifier: GPL-2.0+
- *
- * @Description:
- *
- * Copyright (C) 2025 chasinglulu <wangkart@aliyun.com>
- *
- */
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Axera Laguna SoC register emulation
@@ -32,7 +24,10 @@ struct LUARegisterState {
 	char *name;
 
 	/* register default value*/
-	uint32_t rstval;
+	uint32_t reg_val;
+
+	uint32_t rstval; /* reset value */
+	bool resettable;
 };
 
 typedef struct LUARegisterState LUARegisterState;
@@ -42,6 +37,7 @@ DECLARE_INSTANCE_CHECKER(LUARegisterState, LUA_REGISTER, TYPE_LUA_REGISTER)
 static Property lua_regitser_properties[] = {
 	DEFINE_PROP_STRING("name", LUARegisterState, name),
 	DEFINE_PROP_UINT32("default", LUARegisterState, rstval, 0),
+	DEFINE_PROP_BOOL("resettable", LUARegisterState, resettable, true),
 	DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -51,7 +47,7 @@ static uint64_t lua_register_read(void *opaque, hwaddr offset, unsigned int size
 
 	trace_lua_register_read(SYS_BUS_DEVICE(s)->mmio[0].addr, s->rstval);
 
-	return s->rstval;
+	return s->reg_val;
 }
 
 static void lua_register_write(void *opaque, hwaddr offset,
@@ -61,7 +57,7 @@ static void lua_register_write(void *opaque, hwaddr offset,
 
 	trace_lua_register_write(SYS_BUS_DEVICE(s)->mmio[0].addr, (uint32_t)value);
 
-	s->rstval = value;
+	s->reg_val = value;
 }
 
 static const MemoryRegionOps lua_register_ops = {
@@ -72,6 +68,16 @@ static const MemoryRegionOps lua_register_ops = {
 	.impl.max_access_size = 4,
 };
 
+static void lua_register_reset(DeviceState *dev)
+{
+	LUARegisterState *s = LUA_REGISTER(dev);
+
+	if (s->resettable) {
+		s->reg_val = s->rstval;
+		trace_lua_register_write(SYS_BUS_DEVICE(s)->mmio[0].addr, s->rstval);
+	}
+}
+
 static void lua_regitser_realize(DeviceState *dev, Error **errp)
 {
 	LUARegisterState *s = LUA_REGISTER(dev);
@@ -80,6 +86,8 @@ static void lua_regitser_realize(DeviceState *dev, Error **errp)
 		error_setg(errp, "property 'name' not specified");
 		return;
 	}
+
+	s->reg_val = s->rstval;
 
 	memory_region_init_io(&s->mmio, OBJECT(s), &lua_register_ops,
 	              s, s->name, sizeof(uint32_t));
@@ -92,6 +100,7 @@ static void lua_regitser_class_init(ObjectClass *klass, void *data)
 
 	device_class_set_props(dc, lua_regitser_properties);
 	dc->realize = lua_regitser_realize;
+	dc->reset = lua_register_reset;
 	dc->desc = "Laguna Register With Default Value";
 }
 
