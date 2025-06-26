@@ -845,6 +845,18 @@ static void create_clock_reg(LagunaSoC *s)
 	}
 }
 
+static void create_safety_abc(LagunaSoC *s)
+{
+	DeviceState *dev = qdev_new("laguna.register");
+
+	qdev_prop_set_string(dev, "name", "safety-abc");
+	qdev_prop_set_uint32(dev, "default", s->cfg.safety_abc);
+	qdev_prop_set_bit(dev, "resettable", false);
+	sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+
+	sysbus_mmio_map_overlap(SYS_BUS_DEVICE(dev), 0, 0x006C4000, 0);
+}
+
 static void lua_soc_realize(DeviceState *dev, Error **errp)
 {
 	LagunaSoC *s = LUA_SOC(dev);
@@ -891,6 +903,7 @@ static void lua_soc_realize(DeviceState *dev, Error **errp)
 	create_downloadif(s);
 	create_clock_reg(s);
 	create_sysreset(s);
+	create_safety_abc(s);
 }
 
 static Property lua_soc_properties[] = {
@@ -906,6 +919,7 @@ static Property lua_soc_properties[] = {
 	DEFINE_PROP_UINT32("downif", LagunaSoC, cfg.downif, 0),
 	DEFINE_PROP_BOOL("cdns", LagunaSoC, cfg.cdns, false),
 	DEFINE_PROP_STRING("ocm", LagunaSoC, cfg.ocm_memdev),
+	DEFINE_PROP_UINT32("safety-abc", LagunaSoC, cfg.safety_abc, 0),
 	DEFINE_PROP_END_OF_LIST()
 };
 

@@ -356,6 +356,8 @@ struct LagunaSoC {
 		bool cdns;
 		/* ocm memory backend */
 		char *ocm_memdev;
+		/* safety AB Control */
+		uint32_t safety_abc;
 	} cfg;
 };
 

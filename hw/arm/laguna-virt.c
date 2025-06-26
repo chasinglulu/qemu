@@ -58,6 +58,7 @@ struct LagunaVirt {
 		uint8_t bootmode;
 		uint32_t bootstrap;
 		uint32_t downif;
+		uint32_t abc;
 		const char *ocm_memdev;
 		const char *nor_flash;
 		const char *nand;
@@ -141,6 +142,23 @@ static void lua_virt_set_downif(Object *obj, Visitor *v,
 	}
 
 	s->cfg.downif = value;
+}
+
+static void lua_virt_set_abc(Object *obj, Visitor *v,
+						const char *name, void *opaque,
+						Error **errp)
+{
+	LagunaVirt *s = LAGUNA_VIRT_MACHINE(obj);
+	Error *error = NULL;
+	uint32_t value;
+
+	visit_type_uint32(v, name, &value, &error);
+	if (error) {
+		error_propagate(errp, error);
+		return;
+	}
+
+	s->cfg.abc = value;
 }
 
 static void lua_virt_set_part_config(Object *obj, Visitor *v,
@@ -711,6 +729,10 @@ static void lua_virt_mach_init(MachineState *machine)
 		object_property_set_uint(OBJECT(&vms->lua), "downif",
 								vms->cfg.downif, &error_abort);
 
+	if (vms->cfg.abc)
+		object_property_set_uint(OBJECT(&vms->lua), "safety-abc",
+								vms->cfg.abc, &error_abort);
+
 	if (vms->cfg.cdns)
 		object_property_set_bool(OBJECT(&vms->lua), "cdns",
 								vms->cfg.cdns, &error_abort);
@@ -807,6 +829,9 @@ static void lua_virt_mach_class_init(ObjectClass *oc, void *data)
 					lua_virt_set_cdns);
 	object_class_property_add_str(oc, "ocm", NULL,
 					lua_virt_set_ocm_memdev);
+	object_class_property_add(oc, "abc", "uint32",
+		NULL, lua_virt_set_abc,
+		NULL, NULL);
 }
 
 static void lua_virt_mach_finalize(Object *obj)
