@@ -63,4 +63,4 @@
 	url = https://github.com/libvirt/libvirt-ci.git
 [submodule "subprojects/libvfio-user"]
 	path = subprojects/libvfio-user
-	url = https://github.com/qemu/libvfio-user.git
+	url = https://gitlab.com/qemu-project/libvfio-user.git
